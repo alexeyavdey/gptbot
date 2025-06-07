@@ -1,6 +1,6 @@
 # ChatGPT Telegram Bot
 
-This project is a Telegram bot that uses OpenAI's Assistant API to bring ChatGPT to Telegram. It uses the AsyncOpenAI client and aiogram lib
+This project is a Telegram bot that uses OpenAI's Assistant API to bring ChatGPT to Telegram. It uses the AsyncOpenAI client and aiogram lib. Voice messages are transcribed with OpenAI Whisper.
 
 <div align="center">
   <img src="tg.jpg" alt="GPT Bot Image">
