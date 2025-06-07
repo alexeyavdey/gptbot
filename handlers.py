@@ -1,5 +1,6 @@
 from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
+from . import env
 from .actions import change_assistant, handle_response, change_mode, clear_history
 from .client import get_thread, get_assistant, asst_filter
 from .logger import create_logger
@@ -8,10 +9,48 @@ from .helpers import escape_markdown
 from .users import access_middleware
 from .modes import get_mode, mode_filter
 from .voice import decode_voice
+from aiogram.types import WebAppInfo
+import httpx
+import asyncio
 
 logger = create_logger(__name__)
 router = Router()
 router.message.middleware(access_middleware)
+
+
+async def start_vapi_call(user: types.User) -> str:
+  headers = {
+      "Authorization": f"Bearer {env.VAPI_API_KEY}",
+      "Content-Type": "application/json",
+  }
+  payload = {
+      "assistantId": env.VAPI_ASSISTANT_ID,
+      "metadata": {
+          "telegram_id": user.id,
+          "username": user.username,
+      },
+  }
+  async with httpx.AsyncClient() as client:
+    resp = await client.post(
+        "https://api.vapi.ai/v1/calls",
+        headers=headers,
+        json=payload,
+    )
+    data = resp.json()
+    call_id = data.get("id")
+    summary = data.get("summary")
+    if not summary and call_id:
+      for _ in range(20):
+        await asyncio.sleep(3)
+        r = await client.get(
+            f"https://api.vapi.ai/v1/calls/{call_id}",
+            headers=headers,
+        )
+        d = r.json()
+        if d.get("summary"):
+          summary = d["summary"]
+          break
+    return summary or ""
 
 
 @router.message(CommandStart())
@@ -53,6 +92,26 @@ async def on_mode(message: types.Message) -> None:
           resize_keyboard=True
       )
   )
+
+
+@router.message(Command("miniapp"))
+async def on_miniapp(message: types.Message) -> None:
+  keyboard = types.InlineKeyboardMarkup(
+      inline_keyboard=[[types.InlineKeyboardButton(
+          text=_t("bot.open_web_app"),
+          web_app=WebAppInfo(url=env.WEBAPP_URL)
+      )]]
+  )
+  await message.answer(_t("bot.open_web_app"), reply_markup=keyboard)
+
+
+@router.message(F.web_app_data)
+async def on_web_app_data(message: types.Message) -> None:
+  data = message.web_app_data.data
+  if data == "call":
+    await message.answer(_t("bot.call_started"))
+    summary = await start_vapi_call(message.from_user)
+    await message.answer(_t("bot.call_summary", summary=summary))
 
 
 @router.message(asst_filter)
