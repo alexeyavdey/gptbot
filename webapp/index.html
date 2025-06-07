@@ -5,19 +5,29 @@
   <title>Mini App</title>
   <script>
     function displayUserInfo() {
-      const user = window.Telegram.WebApp.initDataUnsafe.user || {};
+      const warning = document.getElementById('warning');
+      if (!window.Telegram || !window.Telegram.WebApp) {
+        warning.textContent = 'Please open this page via Telegram.';
+        return;
+      }
+      Telegram.WebApp.ready();
+      const user = Telegram.WebApp.initDataUnsafe?.user || {};
       document.getElementById('user-id').textContent = user.id || '';
       document.getElementById('username').textContent = user.username || user.first_name || '';
     }
 
     function startCall() {
-      Telegram.WebApp.sendData('call');
+      if (window.Telegram && Telegram.WebApp && Telegram.WebApp.sendData) {
+        Telegram.WebApp.sendData('call');
+      }
     }
+
     window.addEventListener('DOMContentLoaded', displayUserInfo);
   </script>
 </head>
 <body>
   <h2>User Info</h2>
+  <p id="warning" style="color:red"></p>
   <p>ID: <span id="user-id"></span></p>
   <p>Username: <span id="username"></span></p>
   <button onclick="startCall()">Call Assistant</button>
