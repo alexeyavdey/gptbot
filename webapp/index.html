@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mini App</title>
+  <script>
+    function displayUserInfo() {
+      const user = window.Telegram.WebApp.initDataUnsafe.user || {};
+      document.getElementById('user-id').textContent = user.id || '';
+      document.getElementById('username').textContent = user.username || user.first_name || '';
+    }
+
+    function startCall() {
+      Telegram.WebApp.sendData('call');
+    }
+    window.addEventListener('DOMContentLoaded', displayUserInfo);
+  </script>
+</head>
+<body>
+  <h2>User Info</h2>
+  <p>ID: <span id="user-id"></span></p>
+  <p>Username: <span id="username"></span></p>
+  <button onclick="startCall()">Call Assistant</button>
+</body>
+</html>

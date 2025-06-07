@@ -36,7 +36,14 @@ export LOG_LEVEL=INFO
 export ORG_ID="org-..."
 export API_KEY="sk-..."
 export BOT_TOKEN="..."
+export WEBAPP_URL="http://pan-test.academika.info/webapp"
+export VAPI_API_KEY="..."
+export VAPI_ASSISTANT_ID="..."
 ```
+
+Host the mini app by copying `webapp/index.html` to your nginx server and ensure
+`WEBAPP_URL` points to that page (e.g., `http://pan-test.academika.info/webapp`).
+Set `VAPI_API_KEY` and `VAPI_ASSISTANT_ID` so the bot can call your Vapi.ai assistant when requested from the mini app.
 
 4. **Prepare YAML files:**
    - `allowed_users.yaml`: Optional, add this file to restrict access to your ChatGPT bot.
@@ -52,6 +59,9 @@ python -m gptbot
 ```
 
 Interact with your ChatGPT bot via Telegram
+
+Send `/miniapp` to get a link to a mini web app showing your Telegram ID and username.
+Inside the mini app press "Call Assistant" to start a voice call via Vapi.ai. Once the call finishes you will receive a summary in chat.
 
 ## Notes
 
