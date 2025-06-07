@@ -87,7 +87,7 @@ async def has_access(message: types.Message):
 async def access_middleware(handler, message: types.Message, data):
   logger.debug(f"middleware:{message}")
 
-  if message.text is None:
+  if message.text is None and message.voice is None:
     logger.debug(f"blocked:message.text={message.text}")
     return
 

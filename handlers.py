@@ -1,4 +1,4 @@
-from aiogram import Router, types
+from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
 from .actions import change_assistant, handle_response
 from .client import get_thread, get_assistant, asst_filter
@@ -6,6 +6,7 @@ from .logger import create_logger
 from .translate import _t
 from .helpers import escape_markdown
 from .users import access_middleware
+from .voice import decode_voice
 
 logger = create_logger(__name__)
 router = Router()
@@ -41,6 +42,14 @@ async def on_tutor(message: types.Message) -> None:
 @router.message(asst_filter)
 async def on_change(message: types.Message) -> None:
   await change_assistant(message)
+
+
+@router.message(F.voice)
+async def on_voice(message: types.Message) -> None:
+  text = await decode_voice(message)
+  if text:
+    text_message = message.model_copy(update={"text": text})
+    await handle_response(text_message)
 
 
 @router.message()
