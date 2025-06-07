@@ -6,6 +6,8 @@ messages = {
             "welcome": "Hi, {name}!\n```{id}```",
             "new_chat": "`Context cleared`",
             "new_tutor": "Select new Assistant:\n{tutors}",
+            "new_mode": "Select mode:",
+            "your_mode": "Mode: `{mode}`",
             "error_in_the_code": "`error 42`"
         },
         "gpt": {
@@ -19,6 +21,8 @@ messages = {
             "welcome": "Привет, {name}!\n```{id}```",
             "new_chat": "`История очищена`",
             "new_tutor": "Выберите нового Ассистента:\n{tutors}",
+            "new_mode": "Выберите режим:",
+            "your_mode": "Режим: `{mode}`",
             "error_in_the_code": "`ошибка 42`"
         },
         "gpt": {

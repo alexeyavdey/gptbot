@@ -1,11 +1,12 @@
 from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
-from .actions import change_assistant, handle_response
+from .actions import change_assistant, handle_response, change_mode, clear_history
 from .client import get_thread, get_assistant, asst_filter
 from .logger import create_logger
 from .translate import _t
 from .helpers import escape_markdown
 from .users import access_middleware
+from .modes import get_mode, mode_filter
 from .voice import decode_voice
 
 logger = create_logger(__name__)
@@ -24,6 +25,9 @@ async def on_new(message: types.Message) -> None:
   await message.answer(_t("bot.new_chat"))
   thread = await get_thread(message.from_user.id, new_thread=True)
   logger.debug(f"on_new:{thread}")
+  mode = await get_mode(message.from_user.id)
+  if mode != "assistant":
+    clear_history(message.from_user.id)
 
 
 @router.message(Command("tutor"))
@@ -39,9 +43,26 @@ async def on_tutor(message: types.Message) -> None:
   )
 
 
+@router.message(Command("mode"))
+async def on_mode(message: types.Message) -> None:
+  modes = ["assistant", "gpt-4.1"]
+  await message.answer(
+      _t("bot.new_mode"),
+      reply_markup=types.ReplyKeyboardMarkup(
+          keyboard=[[types.KeyboardButton(text=mode) for mode in modes]],
+          resize_keyboard=True
+      )
+  )
+
+
 @router.message(asst_filter)
 async def on_change(message: types.Message) -> None:
   await change_assistant(message)
+
+
+@router.message(mode_filter)
+async def on_change_mode(message: types.Message) -> None:
+  await change_mode(message)
 
 
 @router.message(F.voice)

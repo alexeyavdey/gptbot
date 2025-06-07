@@ -11,9 +11,13 @@ from . import config
 from .helpers import ChatActions, is_valid_markdown, escape_markdown
 from .users import is_group_bot
 from .message_queues import QueueController, thread_lock
+from .modes import get_mode
 
 
 logger = create_logger(__name__)
+
+GPT4_MODEL = "gpt-4.1"
+model_history = {}
 
 
 async def change_assistant(message: types.Message):
@@ -24,11 +28,28 @@ async def change_assistant(message: types.Message):
   logger.info(f"new_assistant:{user_id}:{tutor}:{assistant.id}")
 
 
+async def change_mode(message: types.Message):
+  mode = message.text
+  user_id = message.from_user.id
+  await get_mode(user_id, mode)
+  await message.answer(_t("bot.your_mode", mode=mode), reply_markup=types.ReplyKeyboardRemove())
+  logger.info(f"new_mode:{user_id}:{mode}")
+
+
+def clear_history(user_id):
+  model_history.pop(user_id, None)
+
+
 async def handle_response(message: types.Message):
   user_id = message.from_user.id
   username = message.from_user.username
 
   logger.info(f"user:{username}:{user_id}\n\t{message.md_text}")
+
+  mode = await get_mode(user_id)
+  if mode != "assistant":
+    await process_model_message(user_id, message)
+    return
 
   thread = await get_thread(user_id)
   logger.debug(f"handle_response:{thread}")
@@ -115,3 +136,15 @@ async def add_messages_to_thread(thread: beta.Thread, messages: List[types.Messa
       content="\n".join(message.md_text for message in messages)
   )
   logger.debug(f"add_message_to_thread:{user_request.id}")
+
+
+async def process_model_message(user_id: int, message: types.Message):
+  history = model_history.setdefault(user_id, [])
+  history.append({"role": "user", "content": message.text})
+  response = await client.chat.completions.create(
+      model=GPT4_MODEL,
+      messages=history,
+  )
+  reply = response.choices[0].message.content
+  history.append({"role": "assistant", "content": reply})
+  await message.answer(reply)
