@@ -61,6 +61,7 @@ python -m gptbot
 Interact with your ChatGPT bot via Telegram
 
 Send `/miniapp` to get a link to a mini web app showing your Telegram ID and username.
+Always open the mini app from Telegram using this command; opening the page directly in a browser will not load the required Telegram context.
 Inside the mini app press "Call Assistant" to start a voice call via Vapi.ai. Once the call finishes you will receive a summary in chat.
 
 ## Notes
