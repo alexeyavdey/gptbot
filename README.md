@@ -13,6 +13,7 @@ To use this bot, you will need to set up a few things:
 - **OpenAI API Key**: Create an API key at [OpenAI Platform](https://platform.openai.com/api-keys).
 - **Assistant**: Create a new assistant at [OpenAI Assistants](https://platform.openai.com/assistants). You will need to note the assistant ID to configure in either `tutors.yaml` or `assistants_factory.py`.
 - **Telegram Bot**: Create a new bot on Telegram via [BotFather](https://t.me/BotFather) and keep the bot token.
+- **aiogram 3.4+**: This project relies on features introduced in aiogram 3.4, so ensure the library version is 3.4.0 or newer.
 
 ## Installation
 
