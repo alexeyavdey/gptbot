@@ -1,5 +1,6 @@
 from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
+from pathlib import Path
 from . import env
 from .actions import change_assistant, handle_response, change_mode, clear_history
 from .file_search import process_pdf, clear_store
@@ -17,6 +18,10 @@ import asyncio
 logger = create_logger(__name__)
 router = Router()
 router.message.middleware(access_middleware)
+
+# directory for temporary downloads
+DOWNLOADS_DIR = Path("downloads")
+DOWNLOADS_DIR.mkdir(exist_ok=True)
 
 
 async def start_vapi_call(user: types.User) -> str:
@@ -143,14 +148,25 @@ async def on_change_mode(message: types.Message) -> None:
 
 @router.message(F.document.file_name.as_("name"))
 async def on_pdf(message: types.Message, name: str) -> None:
+  logger.info(f"document_received:{message.from_user.id}:{name}")
   if not name.lower().endswith(".pdf"):
+    logger.warning(f"ignored_non_pdf:{message.from_user.id}:{name}")
     return
+
   logger.info(f"on_pdf:file_received:{message.from_user.id}:{name}")
   await message.answer(_t("bot.file_loading"))
-  file = await message.bot.download(message.document.file_id)
-  logger.info(f"on_pdf:file_downloaded:{file.name}")
-  summary = await process_pdf(message.from_user.id, file.name)
+
+  file_path = DOWNLOADS_DIR / f"{message.document.file_id}.pdf"
+  await message.bot.download(message.document.file_id, destination=file_path)
+  logger.info(f"on_pdf:file_downloaded:{file_path}")
+
+  summary = await process_pdf(message.from_user.id, str(file_path))
   await message.answer(_t("bot.file_summary", summary=summary))
+
+  try:
+    file_path.unlink()
+  except OSError as exc:
+    logger.warning(f"on_pdf:file_cleanup_failed:{exc}")
 
 
 @router.message(F.voice)
