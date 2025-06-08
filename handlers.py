@@ -61,7 +61,6 @@ async def start_vapi_call(user: types.User) -> str:
     logger.error(f"start_vapi_call:error:{exc}")
     return "Error contacting VAPI API"
 
-
 @router.message(CommandStart())
 async def on_start(message: types.Message) -> None:
   logger.info(f"on_start:{message.from_user.username}:{message.from_user.id}")
