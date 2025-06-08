@@ -17,6 +17,7 @@ from .modes import get_mode
 logger = create_logger(__name__)
 
 GPT4_MODEL = "gpt-4.1"
+O4_MINI_MODEL = "o4-mini-high"
 model_history = {}
 
 
@@ -141,8 +142,12 @@ async def add_messages_to_thread(thread: beta.Thread, messages: List[types.Messa
 async def process_model_message(user_id: int, message: types.Message):
   history = model_history.setdefault(user_id, [])
   history.append({"role": "user", "content": message.text})
+
+  mode = await get_mode(user_id)
+  model = GPT4_MODEL if mode == "gpt-4.1" else O4_MINI_MODEL
+
   response = await client.chat.completions.create(
-      model=GPT4_MODEL,
+      model=model,
       messages=history,
   )
   reply = response.choices[0].message.content

@@ -77,6 +77,13 @@ async def on_new(message: types.Message) -> None:
     clear_history(message.from_user.id)
 
 
+@router.message(Command("clear"))
+async def on_clear(message: types.Message) -> None:
+  await message.answer(_t("bot.new_chat"))
+  await get_thread(message.from_user.id, new_thread=True)
+  clear_history(message.from_user.id)
+
+
 @router.message(Command("tutor"))
 async def on_tutor(message: types.Message) -> None:
   tutors = await get_assistant()
@@ -92,7 +99,7 @@ async def on_tutor(message: types.Message) -> None:
 
 @router.message(Command("mode"))
 async def on_mode(message: types.Message) -> None:
-  modes = ["assistant", "gpt-4.1"]
+  modes = ["assistant", "gpt-4.1", "o4-mini-high"]
   await message.answer(
       _t("bot.new_mode"),
       reply_markup=types.ReplyKeyboardMarkup(
