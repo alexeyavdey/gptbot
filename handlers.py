@@ -88,7 +88,7 @@ async def on_clear(message: types.Message) -> None:
   await message.answer(_t("bot.new_chat"))
   await get_thread(message.from_user.id, new_thread=True)
   clear_history(message.from_user.id)
-  clear_store(message.from_user.id)
+  await clear_store(message.from_user.id)
 
 
 @router.message(Command("tutor"))
@@ -159,6 +159,21 @@ async def on_pdf(message: types.Message, name: str) -> None:
   file_path = DOWNLOADS_DIR / f"{message.document.file_id}.pdf"
   await message.bot.download(message.document.file_id, destination=file_path)
   logger.info(f"on_pdf:file_downloaded:{file_path}")
+
+  # Get file size and show it
+  file_size = file_path.stat().st_size
+  if file_size < 1024:
+    size_str = f"{file_size} байт"
+  elif file_size < 1024 * 1024:
+    size_str = f"{file_size / 1024:.2f} КБ"
+  else:
+    size_str = f"{file_size / (1024 * 1024):.2f} МБ"
+  
+  await message.answer(
+    f"📄 Файл: `{name}`\n"
+    f"📏 Размер: `{size_str}`\n"
+    f"🔢 Точный размер: `{file_size} байт`"
+  )
 
   summary = await process_pdf(message.from_user.id, str(file_path))
   await message.answer(_t("bot.file_summary", summary=summary))
