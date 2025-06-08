@@ -4,7 +4,7 @@ from PyPDF2 import PdfReader
 
 from .client import client
 from .logger import create_logger
-from .actions import GPT4_MODEL
+from .constants import GPT4_MODEL
 
 logger = create_logger(__name__)
 

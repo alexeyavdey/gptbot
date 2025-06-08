@@ -13,12 +13,11 @@ from .users import is_group_bot
 from .message_queues import QueueController, thread_lock
 from .modes import get_mode
 from .file_search import search_context
+from .constants import GPT4_MODEL, O4_MINI_MODEL
 
 
 logger = create_logger(__name__)
 
-GPT4_MODEL = "gpt-4.1"
-O4_MINI_MODEL = "o4-mini"
 model_history = {}
 
 
