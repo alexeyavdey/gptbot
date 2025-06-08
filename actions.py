@@ -143,6 +143,7 @@ async def process_model_message(user_id: int, message: types.Message):
   history = model_history.setdefault(user_id, [])
   context = await search_context(user_id, message.text)
   if context:
+    logger.info(f"process_model_message:use_vector_store:{user_id}")
     history.append({"role": "system", "content": f"Context:\n{context}"})
   history.append({"role": "user", "content": message.text})
 

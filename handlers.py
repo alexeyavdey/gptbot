@@ -145,8 +145,10 @@ async def on_change_mode(message: types.Message) -> None:
 async def on_pdf(message: types.Message, name: str) -> None:
   if not name.lower().endswith(".pdf"):
     return
+  logger.info(f"on_pdf:file_received:{message.from_user.id}:{name}")
   await message.answer(_t("bot.file_loading"))
   file = await message.bot.download(message.document.file_id)
+  logger.info(f"on_pdf:file_downloaded:{file.name}")
   summary = await process_pdf(message.from_user.id, file.name)
   await message.answer(_t("bot.file_summary", summary=summary))
 

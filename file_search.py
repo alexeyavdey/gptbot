@@ -30,6 +30,7 @@ def _chunk(text: str, size: int = 1000) -> List[str]:
 
 
 async def process_pdf(user_id: int, file_path: str) -> str:
+    logger.info(f"process_pdf:start:{user_id}:{file_path}")
     reader = PdfReader(file_path)
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
     chunks = _chunk(text)
@@ -39,6 +40,7 @@ async def process_pdf(user_id: int, file_path: str) -> str:
         emb = await _embed(chunk)
         embeddings.append({"embedding": emb, "text": chunk})
     vector_store[user_id] = embeddings
+    logger.info(f"process_pdf:stored:{user_id}:{len(embeddings)}_chunks")
 
     summary_prompt = f"Summarize the following text:\n{text}"[:8000]
     response = await client.chat.completions.create(
@@ -46,15 +48,18 @@ async def process_pdf(user_id: int, file_path: str) -> str:
         messages=[{"role": "user", "content": summary_prompt}]
     )
     summary = response.choices[0].message.content.strip()
+    logger.info(f"process_pdf:summary_done:{user_id}")
     return summary
 
 
 async def search_context(user_id: int, query: str) -> str:
     docs = vector_store.get(user_id)
     if not docs:
+        logger.info(f"search_context:no_docs:{user_id}")
         return ""
     query_emb = await _embed(query)
     best = max(docs, key=lambda d: _cosine(query_emb, d["embedding"]))
+    logger.info(f"search_context:found:{user_id}")
     return best["text"]
 
 
