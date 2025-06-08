@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Mini App</title>
   <script src="https://telegram.org/js/telegram-web-app.js?57"></script>
+  <script src="config.js"></script>
   <script>
     function displayUserInfo() {
       const warning = document.getElementById('warning');
@@ -18,8 +19,24 @@
     }
 
     function startCall() {
-      if (window.Telegram && Telegram.WebApp && Telegram.WebApp.sendData) {
-        Telegram.WebApp.sendData('call');
+      const status = document.getElementById('status');
+      if (!(window.Telegram && Telegram.WebApp && Telegram.WebApp.sendData)) {
+        status.textContent = 'Telegram connection missing';
+        return;
+      }
+      status.textContent = 'Calling assistant...';
+      Telegram.WebApp.sendData('call');
+
+      if (typeof VAPI_API_KEY === 'string' && typeof VAPI_ASSISTANT_ID === 'string' &&
+          VAPI_API_KEY && VAPI_ASSISTANT_ID) {
+        fetch('https://api.vapi.ai/v1/calls?limit=1', {
+          headers: { 'Authorization': 'Bearer ' + VAPI_API_KEY }
+        }).then(resp => {
+          if (!resp.ok) throw new Error('bad');
+          status.textContent = 'VAPI API reachable';
+        }).catch(() => {
+          status.textContent = 'Error contacting VAPI API';
+        });
       }
     }
 
@@ -29,6 +46,7 @@
 <body>
   <h2>User Info</h2>
   <p id="warning" style="color:red"></p>
+  <p id="status" style="color:green"></p>
   <p>ID: <span id="user-id"></span></p>
   <p>Username: <span id="username"></span></p>
   <button onclick="startCall()">Call Assistant</button>

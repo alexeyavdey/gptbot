@@ -19,6 +19,9 @@ router.message.middleware(access_middleware)
 
 
 async def start_vapi_call(user: types.User) -> str:
+  if not env.VAPI_API_KEY or not env.VAPI_ASSISTANT_ID:
+    return "VAPI credentials not configured"
+
   headers = {
       "Authorization": f"Bearer {env.VAPI_API_KEY}",
       "Content-Type": "application/json",
@@ -30,28 +33,33 @@ async def start_vapi_call(user: types.User) -> str:
           "username": user.username,
       },
   }
-  async with httpx.AsyncClient() as client:
-    resp = await client.post(
-        "https://api.vapi.ai/v1/calls",
-        headers=headers,
-        json=payload,
-    )
-    data = resp.json()
-    call_id = data.get("id")
-    summary = data.get("summary")
-    if not summary and call_id:
-      for _ in range(20):
-        await asyncio.sleep(3)
-        r = await client.get(
-            f"https://api.vapi.ai/v1/calls/{call_id}",
-            headers=headers,
-        )
-        d = r.json()
-        if d.get("summary"):
-          summary = d["summary"]
-          break
-    return summary or ""
-
+  try:
+    async with httpx.AsyncClient() as client:
+      resp = await client.post(
+          "https://api.vapi.ai/v1/calls",
+          headers=headers,
+          json=payload,
+      )
+      resp.raise_for_status()
+      data = resp.json()
+      call_id = data.get("id")
+      summary = data.get("summary")
+      if not summary and call_id:
+        for _ in range(20):
+          await asyncio.sleep(3)
+          r = await client.get(
+              f"https://api.vapi.ai/v1/calls/{call_id}",
+              headers=headers,
+          )
+          r.raise_for_status()
+          d = r.json()
+          if d.get("summary"):
+            summary = d["summary"]
+            break
+      return summary or ""
+  except Exception as exc:
+    logger.error(f"start_vapi_call:error:{exc}")
+    return "Error contacting VAPI API"
 
 @router.message(CommandStart())
 async def on_start(message: types.Message) -> None:
