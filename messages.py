@@ -12,6 +12,8 @@ messages = {
             "open_web_app": "Open mini app",
             "call_started": "Calling assistant...",
             "call_summary": "Call summary: {summary}"
+            ,"file_loading": "Loading file..."
+            ,"file_summary": "File summary: {summary}"
         },
         "gpt": {
             "instructions": "Please address the user as {name}. Full user data: user_id={id} full_name={full_name}. {instructions}"
@@ -30,6 +32,8 @@ messages = {
             "open_web_app": "Открыть мини-приложение",
             "call_started": "Звоню ассистенту...",
             "call_summary": "Сводка разговора: {summary}"
+            ,"file_loading": "Загружаю файл..."
+            ,"file_summary": "Сводка файла: {summary}"
         },
         "gpt": {
             "instructions": "Пожалуйста, обращайтесь к пользователю как {name}. Полные данные пользователя: user_id={id} full_name={full_name}. {instructions}"
