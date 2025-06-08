@@ -12,12 +12,13 @@ from .helpers import ChatActions, is_valid_markdown, escape_markdown
 from .users import is_group_bot
 from .message_queues import QueueController, thread_lock
 from .modes import get_mode
+from .file_search import search_context
 
 
 logger = create_logger(__name__)
 
 GPT4_MODEL = "gpt-4.1"
-O4_MINI_MODEL = "o4-mini-high"
+O4_MINI_MODEL = "o4-mini"
 model_history = {}
 
 
@@ -141,6 +142,9 @@ async def add_messages_to_thread(thread: beta.Thread, messages: List[types.Messa
 
 async def process_model_message(user_id: int, message: types.Message):
   history = model_history.setdefault(user_id, [])
+  context = await search_context(user_id, message.text)
+  if context:
+    history.append({"role": "system", "content": f"Context:\n{context}"})
   history.append({"role": "user", "content": message.text})
 
   mode = await get_mode(user_id)

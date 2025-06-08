@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
 from . import env
 from .actions import change_assistant, handle_response, change_mode, clear_history
+from .file_search import process_pdf, clear_store
 from .client import get_thread, get_assistant, asst_filter
 from .logger import create_logger
 from .translate import _t
@@ -82,6 +83,7 @@ async def on_clear(message: types.Message) -> None:
   await message.answer(_t("bot.new_chat"))
   await get_thread(message.from_user.id, new_thread=True)
   clear_history(message.from_user.id)
+  clear_store(message.from_user.id)
 
 
 @router.message(Command("tutor"))
@@ -99,7 +101,7 @@ async def on_tutor(message: types.Message) -> None:
 
 @router.message(Command("mode"))
 async def on_mode(message: types.Message) -> None:
-  modes = ["assistant", "gpt-4.1", "o4-mini-high"]
+  modes = ["assistant", "gpt-4.1", "o4-mini"]
   await message.answer(
       _t("bot.new_mode"),
       reply_markup=types.ReplyKeyboardMarkup(
@@ -137,6 +139,16 @@ async def on_change(message: types.Message) -> None:
 @router.message(mode_filter)
 async def on_change_mode(message: types.Message) -> None:
   await change_mode(message)
+
+
+@router.message(F.document.file_name.as_("name"))
+async def on_pdf(message: types.Message, name: str) -> None:
+  if not name.lower().endswith(".pdf"):
+    return
+  await message.answer(_t("bot.file_loading"))
+  file = await message.bot.download(message.document.file_id)
+  summary = await process_pdf(message.from_user.id, file.name)
+  await message.answer(_t("bot.file_summary", summary=summary))
 
 
 @router.message(F.voice)
