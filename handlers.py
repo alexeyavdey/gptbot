@@ -7,7 +7,7 @@ from .file_search import process_pdf, clear_store
 from .client import get_thread, get_assistant, asst_filter
 from .logger import create_logger
 from .translate import _t
-from .helpers import escape_markdown
+from .helpers import escape_markdown, is_valid_markdown
 from .users import access_middleware
 from .modes import get_mode, mode_filter
 from .voice import decode_voice
@@ -133,6 +133,8 @@ async def on_web_app_data(message: types.Message) -> None:
   if data == "call":
     await message.answer(_t("bot.call_started"))
     summary = await start_vapi_call(message.from_user)
+    if not is_valid_markdown(summary):
+      summary = escape_markdown(summary)
     await message.answer(_t("bot.call_summary", summary=summary))
 
 
@@ -176,6 +178,8 @@ async def on_pdf(message: types.Message, name: str) -> None:
   )
 
   summary = await process_pdf(message.from_user.id, str(file_path))
+  if not is_valid_markdown(summary):
+    summary = escape_markdown(summary)
   await message.answer(_t("bot.file_summary", summary=summary))
 
   try:
