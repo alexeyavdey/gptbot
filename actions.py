@@ -140,11 +140,27 @@ async def add_messages_to_thread(thread: beta.Thread, messages: List[types.Messa
 
 
 async def process_model_message(user_id: int, message: types.Message):
-  history = model_history.setdefault(user_id, [])
+  # Получаем тред пользователя для синхронизации с Assistant API
+  thread = await get_thread(user_id)
+  
+  # Добавляем контекст из RAG в начале если нужен
   context = await search_context(user_id, message.text)
+  history = []
   if context:
     logger.info(f"process_model_message:use_vector_store:{user_id}")
     history.append({"role": "system", "content": f"Context:\n{context}"})
+  
+  # Загружаем историю из треда OpenAI
+  thread_messages = await client.beta.threads.messages.list(thread_id=thread.id, limit=50)
+  
+  # Конвертируем сообщения из треда в формат chat completions
+  for msg in reversed(thread_messages.data):
+    if msg.role == "user":
+      history.append({"role": "user", "content": msg.content[0].text.value})
+    elif msg.role == "assistant":
+      history.append({"role": "assistant", "content": msg.content[0].text.value})
+  
+  # Добавляем текущее сообщение пользователя
   history.append({"role": "user", "content": message.text})
 
   mode = await get_mode(user_id)
@@ -155,5 +171,17 @@ async def process_model_message(user_id: int, message: types.Message):
       messages=history,
   )
   reply = response.choices[0].message.content
-  history.append({"role": "assistant", "content": reply})
+  
+  # Сохраняем сообщения в тред OpenAI для синхронизации
+  await client.beta.threads.messages.create(
+      thread.id,
+      role="user", 
+      content=message.text
+  )
+  await client.beta.threads.messages.create(
+      thread.id,
+      role="assistant",
+      content=reply
+  )
+  
   await message.answer(reply)
