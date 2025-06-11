@@ -14,6 +14,7 @@ from .message_queues import QueueController, thread_lock
 from .modes import get_mode
 from .file_search import search_context
 from .constants import GPT4_MODEL, O4_MINI_MODEL
+from .tracker import process_tracker_message
 
 
 logger = create_logger(__name__)
@@ -48,7 +49,10 @@ async def handle_response(message: types.Message):
   logger.info(f"user:{username}:{user_id}\n\t{message.md_text}")
 
   mode = await get_mode(user_id)
-  if mode != "assistant":
+  if mode == "tracker":
+    await process_tracker_message(message)
+    return
+  elif mode != "assistant":
     await process_model_message(user_id, message)
     return
 

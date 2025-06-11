@@ -11,6 +11,7 @@ from .helpers import escape_markdown, is_valid_markdown
 from .users import access_middleware
 from .modes import get_mode, mode_filter
 from .voice import decode_voice
+from .tracker import process_tracker_callback
 from aiogram.types import WebAppInfo
 import httpx
 import asyncio
@@ -106,7 +107,7 @@ async def on_tutor(message: types.Message) -> None:
 
 @router.message(Command("mode"))
 async def on_mode(message: types.Message) -> None:
-  modes = ["assistant", "gpt-4.1", "o4-mini"]
+  modes = ["assistant", "gpt-4.1", "o4-mini", "tracker"]
   await message.answer(
       _t("bot.new_mode"),
       reply_markup=types.ReplyKeyboardMarkup(
@@ -186,6 +187,11 @@ async def on_pdf(message: types.Message, name: str) -> None:
     file_path.unlink()
   except OSError as exc:
     logger.warning(f"on_pdf:file_cleanup_failed:{exc}")
+
+
+@router.callback_query(F.data.startswith("tracker_"))
+async def on_tracker_callback(callback_query: types.CallbackQuery) -> None:
+  await process_tracker_callback(callback_query)
 
 
 @router.message(F.voice)

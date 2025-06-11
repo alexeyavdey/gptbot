@@ -38,4 +38,4 @@ async def get_mode(user_id=None, new_mode=None):
 
 
 def mode_filter(message: types.Message):
-    return message.text in ["assistant", "gpt-4.1", "o4-mini"]
+    return message.text in ["assistant", "gpt-4.1", "o4-mini", "tracker"]
