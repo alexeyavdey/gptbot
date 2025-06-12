@@ -6,6 +6,9 @@ from aiogram import types
 from .logger import create_logger
 from .client import client
 from .constants import GPT4_MODEL
+import uuid
+from datetime import datetime, timedelta
+import pytz
 
 logger = create_logger(__name__)
 
@@ -22,6 +25,57 @@ class WelcomeState:
     STEP_5_AI_MENTOR = "ai_mentor"
     STEP_6_COMPLETION = "completion"
     COMPLETED = "completed"
+
+# Статусы задач
+class TaskStatus:
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+# Приоритеты задач
+class TaskPriority:
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+# Структура задачи
+class TrackerTask:
+    def __init__(self, title: str, description: str = "", priority: str = TaskPriority.MEDIUM):
+        self.id = str(uuid.uuid4())
+        self.title = title
+        self.description = description
+        self.priority = priority
+        self.status = TaskStatus.PENDING
+        self.created_at = int(time.time())
+        self.updated_at = int(time.time())
+        self.due_date = None
+        self.completed_at = None
+    
+    def to_dict(self) -> Dict:
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'priority': self.priority,
+            'status': self.status,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
+            'due_date': self.due_date,
+            'completed_at': self.completed_at
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'TrackerTask':
+        task = cls(data['title'], data.get('description', ''), data.get('priority', TaskPriority.MEDIUM))
+        task.id = data['id']
+        task.status = data.get('status', TaskStatus.PENDING)
+        task.created_at = data.get('created_at', int(time.time()))
+        task.updated_at = data.get('updated_at', int(time.time()))
+        task.due_date = data.get('due_date')
+        task.completed_at = data.get('completed_at')
+        return task
 
 # Структура данных пользователя трекера
 class TrackerUserData:
@@ -42,6 +96,10 @@ class TrackerUserData:
         }
         self.met_ai_mentor = False
         self.ai_mentor_history = []  # История разговоров с AI-ментором
+        self.tasks = []  # Массив задач пользователя
+        self.current_view = "main"  # Текущий вид интерфейса (main, tasks, add_task, etc.)
+        self.timezone = "UTC"  # Часовой пояс пользователя
+        self.notification_time = "09:00"  # Время для ежедневных уведомлений
 
 def load_tracker_data() -> Dict:
     """Загружает данные трекера из YAML файла"""
@@ -80,6 +138,13 @@ def get_user_data(user_id: int) -> TrackerUserData:
         user_data.notifications = user_data_dict.get('notifications', user_data.notifications)
         user_data.met_ai_mentor = user_data_dict.get('met_ai_mentor', False)
         user_data.ai_mentor_history = user_data_dict.get('ai_mentor_history', [])
+        
+        # Загружаем задачи
+        tasks_data = user_data_dict.get('tasks', [])
+        user_data.tasks = [TrackerTask.from_dict(task_dict) for task_dict in tasks_data]
+        user_data.current_view = user_data_dict.get('current_view', 'main')
+        user_data.timezone = user_data_dict.get('timezone', 'UTC')
+        user_data.notification_time = user_data_dict.get('notification_time', '09:00')
     
     return user_data
 
@@ -96,7 +161,11 @@ def save_user_data(user_data: TrackerUserData):
         'custom_goal': user_data.custom_goal,
         'notifications': user_data.notifications,
         'met_ai_mentor': user_data.met_ai_mentor,
-        'ai_mentor_history': user_data.ai_mentor_history
+        'ai_mentor_history': user_data.ai_mentor_history,
+        'tasks': [task.to_dict() for task in user_data.tasks],
+        'current_view': user_data.current_view,
+        'timezone': user_data.timezone,
+        'notification_time': user_data.notification_time
     }
     save_tracker_data(all_data)
 
@@ -139,6 +208,22 @@ GOAL_DESCRIPTIONS = {
     "stress_reduction": "Снижение уровня стресса и тревоги", 
     "productivity": "Повышение продуктивности",
     "time_organization": "Организация рабочего времени"
+}
+
+# Описания приоритетов задач
+PRIORITY_DESCRIPTIONS = {
+    TaskPriority.LOW: "🟢 Низкий",
+    TaskPriority.MEDIUM: "🟡 Средний", 
+    TaskPriority.HIGH: "🟠 Высокий",
+    TaskPriority.URGENT: "🔴 Срочный"
+}
+
+# Описания статусов задач
+STATUS_DESCRIPTIONS = {
+    TaskStatus.PENDING: "⏳ Ожидает",
+    TaskStatus.IN_PROGRESS: "🔄 В работе",
+    TaskStatus.COMPLETED: "✅ Выполнена",
+    TaskStatus.CANCELLED: "❌ Отменена"
 }
 
 # Типы уведомлений
@@ -247,6 +332,201 @@ async def chat_with_ai_mentor(user_data: TrackerUserData, user_message: str) -> 
     except Exception as e:
         logger.error(f"Error in AI mentor chat: {e}")
         return "Извините, сейчас у меня проблемы с соединением. Попробуйте чуть позже."
+
+# === CRUD операции для задач ===
+
+def create_task(user_data: TrackerUserData, title: str, description: str = "", priority: str = TaskPriority.MEDIUM) -> TrackerTask:
+    """Создает новую задачу"""
+    task = TrackerTask(title, description, priority)
+    user_data.tasks.append(task)
+    save_user_data(user_data)
+    logger.info(f"Created task '{title}' for user {user_data.user_id}")
+    
+    # Отправляем уведомление о новой задаче (если включены)
+    try:
+        from .notifications import get_notification_manager
+        notification_manager = get_notification_manager()
+        if notification_manager.bot:
+            import asyncio
+            asyncio.create_task(notification_manager.notify_new_task(user_data.user_id, title))
+    except Exception as e:
+        logger.error(f"Error sending new task notification: {e}")
+    
+    return task
+
+def get_task_by_id(user_data: TrackerUserData, task_id: str) -> Optional[TrackerTask]:
+    """Получает задачу по ID"""
+    for task in user_data.tasks:
+        if task.id == task_id:
+            return task
+    return None
+
+def update_task_status(user_data: TrackerUserData, task_id: str, new_status: str) -> bool:
+    """Обновляет статус задачи"""
+    task = get_task_by_id(user_data, task_id)
+    if task:
+        task.status = new_status
+        task.updated_at = int(time.time())
+        if new_status == TaskStatus.COMPLETED:
+            task.completed_at = int(time.time())
+        save_user_data(user_data)
+        logger.info(f"Updated task {task_id} status to {new_status} for user {user_data.user_id}")
+        return True
+    return False
+
+def update_task_priority(user_data: TrackerUserData, task_id: str, new_priority: str) -> bool:
+    """Обновляет приоритет задачи"""
+    task = get_task_by_id(user_data, task_id)
+    if task:
+        task.priority = new_priority
+        task.updated_at = int(time.time())
+        save_user_data(user_data)
+        logger.info(f"Updated task {task_id} priority to {new_priority} for user {user_data.user_id}")
+        return True
+    return False
+
+def delete_task(user_data: TrackerUserData, task_id: str) -> bool:
+    """Удаляет задачу"""
+    for i, task in enumerate(user_data.tasks):
+        if task.id == task_id:
+            removed_task = user_data.tasks.pop(i)
+            save_user_data(user_data)
+            logger.info(f"Deleted task '{removed_task.title}' for user {user_data.user_id}")
+            return True
+    return False
+
+def get_tasks_by_status(user_data: TrackerUserData, status: str) -> List[TrackerTask]:
+    """Получает задачи по статусу"""
+    return [task for task in user_data.tasks if task.status == status]
+
+def get_tasks_by_priority(user_data: TrackerUserData, priority: str) -> List[TrackerTask]:
+    """Получает задачи по приоритету"""
+    return [task for task in user_data.tasks if task.priority == priority]
+
+def get_tasks_sorted(user_data: TrackerUserData, sort_by: str = "created_at") -> List[TrackerTask]:
+    """Получает отсортированные задачи"""
+    if sort_by == "priority":
+        priority_order = {TaskPriority.URGENT: 4, TaskPriority.HIGH: 3, TaskPriority.MEDIUM: 2, TaskPriority.LOW: 1}
+        return sorted(user_data.tasks, key=lambda t: (priority_order.get(t.priority, 0), -t.created_at), reverse=True)
+    elif sort_by == "status":
+        status_order = {TaskStatus.IN_PROGRESS: 4, TaskStatus.PENDING: 3, TaskStatus.COMPLETED: 2, TaskStatus.CANCELLED: 1}
+        return sorted(user_data.tasks, key=lambda t: (status_order.get(t.status, 0), -t.created_at), reverse=True)
+    else:  # created_at
+        return sorted(user_data.tasks, key=lambda t: t.created_at, reverse=True)
+
+def format_task_text(task: TrackerTask, show_details: bool = False, user_data: TrackerUserData = None) -> str:
+    """Форматирует текст задачи для отображения"""
+    status_emoji = STATUS_DESCRIPTIONS.get(task.status, "⚪")
+    priority_emoji = PRIORITY_DESCRIPTIONS.get(task.priority, "⚪")
+    
+    text = f"{status_emoji} **{task.title}**"
+    
+    if show_details:
+        if task.description:
+            text += f"\n📝 {task.description}"
+        text += f"\n🎯 Приоритет: {priority_emoji}"
+        
+        # Используем пользовательский часовой пояс если доступен
+        if user_data:
+            created_time = format_datetime_for_user(task.created_at, user_data)
+            text += f"\n📅 Создана: {created_time}"
+            if task.status == TaskStatus.COMPLETED and task.completed_at:
+                completed_time = format_datetime_for_user(task.completed_at, user_data)
+                text += f"\n✅ Завершена: {completed_time}"
+            if task.due_date:
+                due_time = format_datetime_for_user(task.due_date, user_data)
+                text += f"\n⏰ Дедлайн: {due_time}"
+        else:
+            text += f"\n📅 Создана: {datetime.fromtimestamp(task.created_at).strftime('%d.%m.%Y %H:%M')}"
+            if task.status == TaskStatus.COMPLETED and task.completed_at:
+                text += f"\n✅ Завершена: {datetime.fromtimestamp(task.completed_at).strftime('%d.%m.%Y %H:%M')}"
+            if task.due_date:
+                text += f"\n⏰ Дедлайн: {datetime.fromtimestamp(task.due_date).strftime('%d.%m.%Y %H:%M')}"
+    
+    return text
+
+# === Функции для работы с часовыми поясами ===
+
+def get_user_local_time(user_data: TrackerUserData) -> datetime:
+    """Получает текущее время в часовом поясе пользователя"""
+    try:
+        user_tz = pytz.timezone(user_data.timezone)
+        return datetime.now(user_tz)
+    except:
+        return datetime.now(pytz.UTC)
+
+def format_datetime_for_user(timestamp: int, user_data: TrackerUserData) -> str:
+    """Форматирует timestamp в строку с учетом часового пояса пользователя"""
+    try:
+        user_tz = pytz.timezone(user_data.timezone)
+        dt = datetime.fromtimestamp(timestamp, tz=user_tz)
+        return dt.strftime('%d.%m.%Y %H:%M')
+    except:
+        dt = datetime.fromtimestamp(timestamp, tz=pytz.UTC)
+        return dt.strftime('%d.%m.%Y %H:%M UTC')
+
+def parse_user_time(time_str: str, user_data: TrackerUserData) -> Optional[int]:
+    """Парсит время пользователя в timestamp с учетом часового пояса"""
+    try:
+        user_tz = pytz.timezone(user_data.timezone)
+        
+        # Пробуем разные форматы
+        formats = ['%H:%M', '%d.%m.%Y %H:%M', '%d.%m %H:%M']
+        
+        for fmt in formats:
+            try:
+                if fmt == '%H:%M':
+                    # Только время - используем сегодняшнюю дату
+                    today = get_user_local_time(user_data).date()
+                    parsed_time = datetime.strptime(time_str, fmt).time()
+                    dt = user_tz.localize(datetime.combine(today, parsed_time))
+                else:
+                    # Полная дата и время
+                    dt = user_tz.localize(datetime.strptime(time_str, fmt))
+                
+                return int(dt.timestamp())
+            except ValueError:
+                continue
+        
+        return None
+    except:
+        return None
+
+def get_common_timezones() -> Dict[str, str]:
+    """Возвращает список популярных часовых поясов"""
+    return {
+        "Europe/Moscow": "🇷🇺 Москва (UTC+3)",
+        "Europe/Kiev": "🇺🇦 Киев (UTC+2)",
+        "Europe/Minsk": "🇧🇾 Минск (UTC+3)",
+        "Asia/Almaty": "🇰🇿 Алматы (UTC+6)",
+        "Asia/Tashkent": "🇺🇿 Ташкент (UTC+5)",
+        "Asia/Yerevan": "🇦🇲 Ереван (UTC+4)",
+        "Asia/Baku": "🇦🇿 Баку (UTC+4)",
+        "Europe/London": "🇬🇧 Лондон (UTC+0)",
+        "Europe/Berlin": "🇩🇪 Берлин (UTC+1)",
+        "America/New_York": "🇺🇸 Нью-Йорк (UTC-5)",
+        "Asia/Tokyo": "🇯🇵 Токио (UTC+9)",
+        "UTC": "🌍 UTC (Всемирное время)"
+    }
+
+def detect_timezone_from_locale() -> str:
+    """Пытается определить часовой пояс по системной локали"""
+    try:
+        import locale
+        lang = locale.getdefaultlocale()[0]
+        
+        # Простое определение по языку
+        timezone_map = {
+            'ru_RU': 'Europe/Moscow',
+            'uk_UA': 'Europe/Kiev',
+            'be_BY': 'Europe/Minsk',
+            'kk_KZ': 'Asia/Almaty',
+            'uz_UZ': 'Asia/Tashkent'
+        }
+        
+        return timezone_map.get(lang, 'UTC')
+    except:
+        return 'UTC'
 
 async def process_tracker_message(message: types.Message):
     """Основная функция обработки сообщений в режиме трекера"""
@@ -393,12 +673,306 @@ async def process_tracker_callback(callback_query: types.CallbackQuery):
     
     elif data == "tracker_start_main":
         # Переходим к основному функционалу трекера
-        await callback_query.message.edit_text(
-            "🎯 **Трекер задач готов к работе!**\n\n"
-            "Теперь вы можете использовать основной функционал трекера. "
-            "Просто пишите мне, и я помогу вам с организацией задач и управлением стрессом!",
-            parse_mode="Markdown"
+        await show_main_menu(callback_query.message, user_data)
+    
+    # === Обработка новых callback для управления задачами ===
+    
+    elif data == "tracker_main_menu":
+        await show_main_menu(callback_query.message, user_data)
+    
+    elif data == "tracker_show_tasks":
+        await show_tasks_menu(callback_query.message, user_data)
+    
+    elif data == "tracker_new_task":
+        await start_task_creation(callback_query.message, user_data)
+    
+    elif data == "tracker_cancel_creation":
+        user_data.current_view = "main"
+        save_user_data(user_data)
+        await show_main_menu(callback_query.message, user_data)
+    
+    elif data.startswith("tracker_task_detail_"):
+        task_id = data.replace("tracker_task_detail_", "")
+        await show_task_detail(callback_query.message, user_data, task_id)
+    
+    elif data.startswith("tracker_start_task_"):
+        task_id = data.replace("tracker_start_task_", "")
+        if update_task_status(user_data, task_id, TaskStatus.IN_PROGRESS):
+            await callback_query.message.edit_text(
+                "▶️ **Задача взята в работу!**\n\nУдачи в выполнении! AI-ментор всегда готов помочь советом.",
+                parse_mode="Markdown"
+            )
+            await show_task_detail(callback_query.message, user_data, task_id)
+        else:
+            await callback_query.message.edit_text("❌ Ошибка при обновлении задачи", parse_mode="Markdown")
+    
+    elif data.startswith("tracker_complete_task_"):
+        task_id = data.replace("tracker_complete_task_", "")
+        if update_task_status(user_data, task_id, TaskStatus.COMPLETED):
+            task = get_task_by_id(user_data, task_id)
+            await callback_query.message.edit_text(
+                f"✅ **Поздравляем!**\n\nЗадача '{task.title if task else 'Неизвестная'}' успешно завершена!",
+                parse_mode="Markdown"
+            )
+            await show_tasks_menu(callback_query.message, user_data)
+        else:
+            await callback_query.message.edit_text("❌ Ошибка при обновлении задачи", parse_mode="Markdown")
+    
+    elif data.startswith("tracker_pause_task_"):
+        task_id = data.replace("tracker_pause_task_", "")
+        if update_task_status(user_data, task_id, TaskStatus.PENDING):
+            await show_task_detail(callback_query.message, user_data, task_id)
+        else:
+            await callback_query.message.edit_text("❌ Ошибка при обновлении задачи", parse_mode="Markdown")
+    
+    elif data.startswith("tracker_reopen_task_"):
+        task_id = data.replace("tracker_reopen_task_", "")
+        if update_task_status(user_data, task_id, TaskStatus.PENDING):
+            await show_task_detail(callback_query.message, user_data, task_id)
+        else:
+            await callback_query.message.edit_text("❌ Ошибка при обновлении задачи", parse_mode="Markdown")
+    
+    elif data.startswith("tracker_delete_task_"):
+        task_id = data.replace("tracker_delete_task_", "")
+        task = get_task_by_id(user_data, task_id)
+        if task:
+            text = f"🗑️ **Удаление задачи**\n\n{format_task_text(task, show_details=True, user_data=user_data)}\n\nВы уверены, что хотите удалить эту задачу?"
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"tracker_confirm_delete_{task_id}"),
+                    types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"tracker_task_detail_{task_id}")
+                ]
+            ])
+            await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    
+    elif data.startswith("tracker_confirm_delete_"):
+        task_id = data.replace("tracker_confirm_delete_", "")
+        task = get_task_by_id(user_data, task_id)
+        task_title = task.title if task else "Неизвестная"
+        if delete_task(user_data, task_id):
+            await callback_query.message.edit_text(
+                f"🗑️ **Задача удалена**\n\nЗадача '{task_title}' была успешно удалена.",
+                parse_mode="Markdown"
+            )
+            await show_tasks_menu(callback_query.message, user_data)
+        else:
+            await callback_query.message.edit_text("❌ Ошибка при удалении задачи", parse_mode="Markdown")
+    
+    elif data.startswith("tracker_edit_priority_"):
+        task_id = data.replace("tracker_edit_priority_", "")
+        await show_priority_selection(callback_query.message, user_data, task_id)
+    
+    elif data.startswith("tracker_set_priority_"):
+        # Формат: tracker_set_priority_{task_id}_{priority}
+        parts = data.replace("tracker_set_priority_", "").split("_", 1)
+        if len(parts) == 2:
+            task_id, priority = parts
+            if update_task_priority(user_data, task_id, priority):
+                await show_task_detail(callback_query.message, user_data, task_id)
+            else:
+                await callback_query.message.edit_text("❌ Ошибка при обновлении приоритета", parse_mode="Markdown")
+    
+    elif data == "tracker_ai_mentor_chat":
+        text = (
+            f"🤖 **AI-ментор готов помочь!**\n\n"
+            f"Просто напишите ваш вопрос, и я передам его AI-ментору. "
+            f"Он поможет с планированием, управлением стрессом и повышением продуктивности."
         )
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ Главное меню", callback_data="tracker_main_menu")]
+        ])
+        await callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    
+    elif data == "tracker_settings":
+        await show_settings_menu(callback_query.message, user_data)
+    
+    elif data.startswith("tracker_filter_"):
+        filter_type = data.replace("tracker_filter_", "")
+        await show_filtered_tasks(callback_query.message, user_data, filter_type)
+    
+    # === Обработка настроек ===
+    
+    elif data == "tracker_settings_notifications":
+        await show_notification_settings(callback_query.message, user_data)
+    
+    elif data == "tracker_settings_timezone":
+        await show_timezone_settings(callback_query.message, user_data)
+    
+    elif data.startswith("tracker_set_timezone_"):
+        timezone = data.replace("tracker_set_timezone_", "")
+        user_data.timezone = timezone
+        save_user_data(user_data)
+        await show_timezone_settings(callback_query.message, user_data)
+    
+    elif data == "tracker_test_digest":
+        # Отправляем тестовый дайджест
+        try:
+            from .notifications import get_notification_manager
+            notification_manager = get_notification_manager()
+            await notification_manager.send_manual_digest(user_data.user_id)
+            await callback_query.answer("📬 Тестовый дайджест отправлен!")
+        except Exception as e:
+            logger.error(f"Error sending test digest: {e}")
+            await callback_query.answer("❌ Ошибка отправки дайджеста")
+
+async def show_priority_selection(message: types.Message, user_data: TrackerUserData, task_id: str):
+    """Показывает меню выбора приоритета"""
+    task = get_task_by_id(user_data, task_id)
+    if not task:
+        await message.edit_text("❌ Задача не найдена", parse_mode="Markdown")
+        return
+    
+    text = (
+        f"🎯 **Изменение приоритета**\n\n"
+        f"Задача: {task.title}\n"
+        f"Текущий приоритет: {PRIORITY_DESCRIPTIONS.get(task.priority, 'Неизвестно')}\n\n"
+        f"Выберите новый приоритет:"
+    )
+    
+    keyboard_rows = []
+    for priority, description in PRIORITY_DESCRIPTIONS.items():
+        keyboard_rows.append([types.InlineKeyboardButton(
+            text=description, 
+            callback_data=f"tracker_set_priority_{task_id}_{priority}"
+        )])
+    
+    keyboard_rows.append([
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"tracker_task_detail_{task_id}")
+    ])
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    await message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def show_filtered_tasks(message: types.Message, user_data: TrackerUserData, filter_type: str):
+    """Показывает отфильтрованные задачи"""
+    if filter_type == "in_progress":
+        filtered_tasks = get_tasks_by_status(user_data, TaskStatus.IN_PROGRESS)
+        title = "🔄 Задачи в работе"
+    elif filter_type == "completed":
+        filtered_tasks = get_tasks_by_status(user_data, TaskStatus.COMPLETED)
+        title = "✅ Выполненные задачи"
+    else:
+        filtered_tasks = user_data.tasks
+        title = "📋 Все задачи"
+    
+    if not filtered_tasks:
+        text = f"{title}\n\nЗадач в этой категории пока нет."
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ К задачам", callback_data="tracker_show_tasks")]
+        ])
+    else:
+        text = f"{title} ({len(filtered_tasks)})\n\n"
+        
+        for i, task in enumerate(filtered_tasks[:10]):
+            text += f"{i+1}. {format_task_text(task, user_data=user_data)}\n"
+        
+        if len(filtered_tasks) > 10:
+            text += f"\n... и еще {len(filtered_tasks) - 10} задач"
+        
+        keyboard_rows = []
+        for i, task in enumerate(filtered_tasks[:5]):
+            button_text = f"{i+1}. {task.title[:20]}{'...' if len(task.title) > 20 else ''}"
+            keyboard_rows.append([types.InlineKeyboardButton(
+                text=button_text, 
+                callback_data=f"tracker_task_detail_{task.id}"
+            )])
+        
+        keyboard_rows.append([
+            types.InlineKeyboardButton(text="⬅️ К задачам", callback_data="tracker_show_tasks")
+        ])
+        
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    
+    await message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+# === Функции настроек ===
+
+async def show_settings_menu(message: types.Message, user_data: TrackerUserData):
+    """Показывает меню настроек"""
+    current_time = get_user_local_time(user_data).strftime('%H:%M')
+    timezone_name = get_common_timezones().get(user_data.timezone, f"🌍 {user_data.timezone}")
+    
+    text = (
+        f"⚙️ **Настройки трекера**\n\n"
+        f"🕘 **Часовой пояс:** {timezone_name}\n"
+        f"⏰ **Текущее время:** {current_time}\n"
+        f"📬 **Время уведомлений:** {user_data.notification_time}\n\n"
+        f"📊 **Статус уведомлений:**\n"
+        f"• Система: {'✅' if user_data.notifications.get('enabled', True) else '❌'} {'Включена' if user_data.notifications.get('enabled', True) else 'Отключена'}\n"
+        f"• Дайджест: {'✅' if user_data.notifications.get('daily_digest', False) else '❌'}\n"
+        f"• Дедлайны: {'✅' if user_data.notifications.get('deadline_reminders', False) else '❌'}\n"
+        f"• Новые задачи: {'✅' if user_data.notifications.get('new_task_notifications', False) else '❌'}"
+    )
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="🔔 Уведомления", callback_data="tracker_settings_notifications")],
+        [types.InlineKeyboardButton(text="🌍 Часовой пояс", callback_data="tracker_settings_timezone")],
+        [types.InlineKeyboardButton(text="📬 Тестовый дайджест", callback_data="tracker_test_digest")],
+        [types.InlineKeyboardButton(text="⬅️ Главное меню", callback_data="tracker_main_menu")]
+    ])
+    
+    await message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def show_notification_settings(message: types.Message, user_data: TrackerUserData):
+    """Показывает настройки уведомлений"""
+    text = (
+        f"🔔 **Настройки уведомлений**\n\n"
+        f"Выберите типы уведомлений, которые хотите получать:"
+    )
+    
+    keyboard_rows = []
+    
+    # Главный переключатель
+    enabled_emoji = "✅" if user_data.notifications.get('enabled', True) else "❌"
+    keyboard_rows.append([types.InlineKeyboardButton(
+        text=f"{enabled_emoji} Включить уведомления", 
+        callback_data="tracker_notif_toggle_enabled"
+    )])
+    
+    # Типы уведомлений
+    for notif_id, notif_desc in NOTIFICATION_TYPES.items():
+        emoji = "✅" if user_data.notifications.get(notif_id, False) else "☐"
+        button_text = f"{emoji} {notif_desc}"
+        keyboard_rows.append([types.InlineKeyboardButton(
+            text=button_text, 
+            callback_data=f"tracker_notif_toggle_{notif_id}"
+        )])
+    
+    keyboard_rows.append([
+        types.InlineKeyboardButton(text="⬅️ Настройки", callback_data="tracker_settings")
+    ])
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    await message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def show_timezone_settings(message: types.Message, user_data: TrackerUserData):
+    """Показывает настройки часового пояса"""
+    current_tz = user_data.timezone
+    current_time = get_user_local_time(user_data).strftime('%H:%M')
+    
+    text = (
+        f"🌍 **Выбор часового пояса**\n\n"
+        f"Текущий: {get_common_timezones().get(current_tz, current_tz)}\n"
+        f"Время: {current_time}\n\n"
+        f"Выберите ваш часовой пояс:"
+    )
+    
+    keyboard_rows = []
+    timezones = get_common_timezones()
+    
+    for tz_id, tz_desc in timezones.items():
+        emoji = "✅ " if tz_id == current_tz else ""
+        keyboard_rows.append([types.InlineKeyboardButton(
+            text=f"{emoji}{tz_desc}", 
+            callback_data=f"tracker_set_timezone_{tz_id}"
+        )])
+    
+    keyboard_rows.append([
+        types.InlineKeyboardButton(text="⬅️ Настройки", callback_data="tracker_settings")
+    ])
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    await message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
 
 async def handle_welcome_module(message: types.Message, user_data: TrackerUserData):
     """Обработка приветственного модуля"""
@@ -421,26 +995,212 @@ async def handle_main_tracker_functionality(message: types.Message, user_data: T
     """Обработка основного функционала трекера (после завершения приветственного модуля)"""
     user_message = message.text.strip()
     
+    # Обработка команд для управления задачами
+    if user_message.lower().startswith(('/задачи', '/tasks', 'задачи', 'tasks')):
+        await show_tasks_menu(message, user_data)
+        return
+    elif user_message.lower().startswith(('/новая', '/new', 'новая задача', 'создать задачу')):
+        await start_task_creation(message, user_data)
+        return
+    elif user_message.lower().startswith(('/меню', '/menu', 'меню')):
+        await show_main_menu(message, user_data)
+        return
+    
+    # Если пользователь в процессе создания задачи
+    if user_data.current_view == "creating_task":
+        await handle_task_creation_input(message, user_data)
+        return
+    
     # Если пользователь общался с AI-ментором, продолжаем общение
-    if user_data.met_ai_mentor and user_message:
+    if user_data.met_ai_mentor and user_message and not user_message.startswith('/'):
         ai_response = await chat_with_ai_mentor(user_data, user_message)
         await message.answer(f"🤖 **AI-ментор:**\n\n{ai_response}", parse_mode="Markdown")
         return
     
-    # Основной функционал трекера (пока базовый)
-    await message.answer(
-        "🎯 **Трекер задач активен!**\n\n"
-        "Вы можете:\n"
-        "• Общаться с AI-ментором (просто пишите вопросы)\n"
-        "• Получать советы по управлению стрессом\n"
-        "• Планировать задачи и расставлять приоритеты\n\n"
-        f"📊 **Ваш профиль:**\n"
-        f"• Уровень тревожности: {user_data.anxiety_level or 'не указан'}\n"
-        f"• Выбранные цели: {len(user_data.goals)} из {len(GOAL_DESCRIPTIONS)}\n"
-        f"• Уведомления: {'включены' if user_data.notifications.get('enabled', True) else 'отключены'}\n\n"
-        f"💡 Просто напишите мне, чем могу помочь!",
-        parse_mode="Markdown"
+    # Показываем главное меню по умолчанию
+    await show_main_menu(message, user_data)
+
+# === UI функции для работы с задачами ===
+
+async def show_main_menu(message: types.Message, user_data: TrackerUserData):
+    """Показывает главное меню трекера"""
+    user_data.current_view = "main"
+    save_user_data(user_data)
+    
+    # Подсчет задач по статусам
+    pending_count = len(get_tasks_by_status(user_data, TaskStatus.PENDING))
+    in_progress_count = len(get_tasks_by_status(user_data, TaskStatus.IN_PROGRESS))
+    completed_count = len(get_tasks_by_status(user_data, TaskStatus.COMPLETED))
+    total_tasks = len(user_data.tasks)
+    
+    text = (
+        f"🎯 **Главное меню трекера**\n\n"
+        f"📊 **Статистика задач:**\n"
+        f"• Всего задач: {total_tasks}\n"
+        f"• ⏳ Ожидают: {pending_count}\n"
+        f"• 🔄 В работе: {in_progress_count}\n"
+        f"• ✅ Выполнены: {completed_count}\n\n"
+        f"Выберите действие:"
     )
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="📋 Мои задачи", callback_data="tracker_show_tasks")],
+        [types.InlineKeyboardButton(text="➕ Новая задача", callback_data="tracker_new_task")],
+        [types.InlineKeyboardButton(text="🤖 AI-ментор", callback_data="tracker_ai_mentor_chat")],
+        [types.InlineKeyboardButton(text="⚙️ Настройки", callback_data="tracker_settings")]
+    ])
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def show_tasks_menu(message: types.Message, user_data: TrackerUserData):
+    """Показывает меню с задачами"""
+    user_data.current_view = "tasks"
+    save_user_data(user_data)
+    
+    if not user_data.tasks:
+        text = (
+            f"📋 **Мои задачи**\n\n"
+            f"У вас пока нет задач. Создайте первую задачу!"
+        )
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="➕ Создать задачу", callback_data="tracker_new_task")],
+            [types.InlineKeyboardButton(text="⬅️ Главное меню", callback_data="tracker_main_menu")]
+        ])
+    else:
+        # Получаем задачи, отсортированные по приоритету и статусу
+        sorted_tasks = get_tasks_sorted(user_data, "priority")
+        
+        text = f"📋 **Мои задачи** ({len(user_data.tasks)})\n\n"
+        
+        # Показываем первые 5 задач
+        for i, task in enumerate(sorted_tasks[:5]):
+            text += f"{i+1}. {format_task_text(task, user_data=user_data)}\n"
+        
+        if len(sorted_tasks) > 5:
+            text += f"\n... и еще {len(sorted_tasks) - 5} задач"
+        
+        keyboard_rows = []
+        
+        # Кнопки для первых задач
+        for i, task in enumerate(sorted_tasks[:3]):
+            button_text = f"{i+1}. {task.title[:20]}{'...' if len(task.title) > 20 else ''}"
+            keyboard_rows.append([types.InlineKeyboardButton(
+                text=button_text, 
+                callback_data=f"tracker_task_detail_{task.id}"
+            )])
+        
+        # Дополнительные кнопки
+        keyboard_rows.extend([
+            [
+                types.InlineKeyboardButton(text="📋 Все задачи", callback_data="tracker_all_tasks"),
+                types.InlineKeyboardButton(text="➕ Новая", callback_data="tracker_new_task")
+            ],
+            [
+                types.InlineKeyboardButton(text="🔄 В работе", callback_data="tracker_filter_in_progress"),
+                types.InlineKeyboardButton(text="✅ Выполнены", callback_data="tracker_filter_completed")
+            ],
+            [types.InlineKeyboardButton(text="⬅️ Главное меню", callback_data="tracker_main_menu")]
+        ])
+        
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def start_task_creation(message: types.Message, user_data: TrackerUserData):
+    """Начинает процесс создания новой задачи"""
+    user_data.current_view = "creating_task"
+    save_user_data(user_data)
+    
+    text = (
+        f"➕ **Создание новой задачи**\n\n"
+        f"Напишите название задачи:"
+    )
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="❌ Отмена", callback_data="tracker_cancel_creation")]
+    ])
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def handle_task_creation_input(message: types.Message, user_data: TrackerUserData):
+    """Обрабатывает ввод при создании задачи"""
+    task_title = message.text.strip()
+    
+    if not task_title or len(task_title) < 3:
+        await message.answer(
+            "❌ Название задачи должно содержать минимум 3 символа. Попробуйте еще раз:",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Создаем задачу
+    task = create_task(user_data, task_title)
+    user_data.current_view = "main"
+    save_user_data(user_data)
+    
+    text = (
+        f"✅ **Задача создана!**\n\n"
+        f"{format_task_text(task, show_details=True, user_data=user_data)}\n\n"
+        f"Хотите настроить приоритет или описание?"
+    )
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [
+            types.InlineKeyboardButton(text="🎯 Приоритет", callback_data=f"tracker_edit_priority_{task.id}"),
+            types.InlineKeyboardButton(text="📝 Описание", callback_data=f"tracker_edit_description_{task.id}")
+        ],
+        [
+            types.InlineKeyboardButton(text="▶️ Начать работу", callback_data=f"tracker_start_task_{task.id}"),
+            types.InlineKeyboardButton(text="📋 К задачам", callback_data="tracker_show_tasks")
+        ]
+    ])
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def show_task_detail(message: types.Message, user_data: TrackerUserData, task_id: str):
+    """Показывает детали задачи"""
+    task = get_task_by_id(user_data, task_id)
+    if not task:
+        await message.answer("❌ Задача не найдена", parse_mode="Markdown")
+        return
+    
+    text = (
+        f"📋 **Детали задачи**\n\n"
+        f"{format_task_text(task, show_details=True, user_data=user_data)}"
+    )
+    
+    keyboard_rows = []
+    
+    # Кнопки управления статусом
+    if task.status == TaskStatus.PENDING:
+        keyboard_rows.append([
+            types.InlineKeyboardButton(text="▶️ Начать", callback_data=f"tracker_start_task_{task.id}"),
+            types.InlineKeyboardButton(text="✅ Завершить", callback_data=f"tracker_complete_task_{task.id}")
+        ])
+    elif task.status == TaskStatus.IN_PROGRESS:
+        keyboard_rows.append([
+            types.InlineKeyboardButton(text="⏸️ Приостановить", callback_data=f"tracker_pause_task_{task.id}"),
+            types.InlineKeyboardButton(text="✅ Завершить", callback_data=f"tracker_complete_task_{task.id}")
+        ])
+    elif task.status == TaskStatus.COMPLETED:
+        keyboard_rows.append([
+            types.InlineKeyboardButton(text="🔄 Возобновить", callback_data=f"tracker_reopen_task_{task.id}")
+        ])
+    
+    # Кнопки редактирования
+    keyboard_rows.append([
+        types.InlineKeyboardButton(text="🎯 Приоритет", callback_data=f"tracker_edit_priority_{task.id}"),
+        types.InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"tracker_delete_task_{task.id}")
+    ])
+    
+    # Навигация
+    keyboard_rows.append([
+        types.InlineKeyboardButton(text="⬅️ К задачам", callback_data="tracker_show_tasks")
+    ])
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    
+    await message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
 
 # Заглушки для функций шагов - будут реализованы далее
 async def show_step_1_greeting(message: types.Message, user_data: TrackerUserData):
