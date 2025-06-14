@@ -50,7 +50,7 @@ logger = create_logger(__name__)
 class BaseAgent:
     """Базовый класс для всех AI-агентов"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         # Устанавливаем переменную окружения для LangChain
         import os
         os.environ['OPENAI_API_KEY'] = api_key
@@ -68,7 +68,7 @@ class BaseAgent:
 class WelcomeAgent(BaseAgent):
     """AI-агент для приветственного модуля (6-step onboarding)"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         super().__init__(api_key, model)
         self.system_prompt = """
         Ты - AI-агент приветственного модуля трекера продуктивности.
@@ -122,7 +122,7 @@ class WelcomeAgent(BaseAgent):
 class TaskManagementAgent(BaseAgent):
     """AI-агент для управления задачами (Phase 2 функциональность)"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         super().__init__(api_key, model)
         self.tools = self._create_tools()
         self.system_prompt = """
@@ -362,7 +362,7 @@ class TaskManagementAgent(BaseAgent):
 class NotificationAgent(BaseAgent):
     """AI-агент для управления уведомлениями (Phase 3 функциональность)"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         super().__init__(api_key, model)
         self.system_prompt = """
         Ты - AI-агент для управления уведомлениями в трекере продуктивности.
@@ -396,7 +396,7 @@ class NotificationAgent(BaseAgent):
 class EveningTrackerAgent(BaseAgent):
     """AI-агент для вечернего трекера (Phase 4 функциональность)"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         super().__init__(api_key, model)
         self.system_prompt = """
         Ты - AI-агент вечернего трекера для поддержки продуктивности и ментального здоровья.
@@ -461,7 +461,7 @@ class EveningTrackerAgent(BaseAgent):
 class AIMentorAgent(BaseAgent):
     """AI-агент ментора с долгосрочной памятью"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         super().__init__(api_key, model)
         self.system_prompt = """
         Ты - AI-ментор для поддержки продуктивности и снижения стресса.
@@ -549,7 +549,7 @@ class AIMentorAgent(BaseAgent):
 class OrchestratorAgent(BaseAgent):
     """AI-агент оркестратор с LLM роутингом"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1"):
         super().__init__(api_key, model)
         
         # Инициализируем все агенты
@@ -698,7 +698,7 @@ class OrchestratorAgent(BaseAgent):
 
 
 # Функция инициализации
-def initialize_enhanced_agents(api_key: str, model: str = "gpt-4") -> OrchestratorAgent:
+def initialize_enhanced_agents(api_key: str, model: str = "gpt-4.1") -> OrchestratorAgent:
     """Инициализация улучшенной системы агентов"""
     try:
         orchestrator = OrchestratorAgent(api_key, model)

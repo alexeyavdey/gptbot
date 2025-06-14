@@ -30,6 +30,7 @@ def get_orchestrator():
     global orchestrator_agent
     if orchestrator_agent is None:
         try:
+            logger.info(f"api: {env.API_KEY}")
             orchestrator_agent = initialize_enhanced_agents(env.API_KEY, GPT4_MODEL)
             logger.info("Enhanced AI agents initialized successfully")
         except Exception as e:
