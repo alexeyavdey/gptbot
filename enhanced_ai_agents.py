@@ -275,24 +275,14 @@ class TaskManagementAgent(BaseAgent):
         except Exception as e:
             return json.dumps({"success": False, "error": str(e)})
     
-    def _get_analytics(self, params:str) -> str:
+    def _get_analytics(self, params) -> str:
         """Получение аналитики"""
         try:
             # Обрабатываем разные форматы входных данных
             if isinstance(params, str):
                 try:
-                # Обрабатываем разные форматы входных данных
-                if isinstance(params, str):
-                	try:
-                		data = json.loads(params)
-                		user_id = data['user_id']
-	                except:
-	                	# Если это просто строка с числом
-	                	user_id = int(params)
-                elif isinstance(params, int):
-                	user_id = params
-                else:
-                	raise ValueError(f"Unexpected params type: {type(params)}")
+                    data = json.loads(params)
+                    user_id = data['user_id']
                 except:
                     # Если это просто строка с числом
                     user_id = int(params)
