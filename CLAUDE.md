@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Telegram bot that integrates OpenAI's Assistant API with aiogram 3.4+. The bot supports multiple assistants, voice messages via Whisper, PDF processing with RAG, voice calls through Vapi.ai integration, and a comprehensive task tracker with AI mentor for stress management and productivity.
 
-**Key Tracker Features (4 Complete Phases):**
+**Key Tracker Features (5 Complete Phases):**
 - 📋 **Task Management**: Full CRUD with priorities, statuses, and filtering
 - 🧠 **AI Mentor**: Context-aware guidance with 30-day long-term memory  
 - 🌙 **Evening Tracker**: Daily reflection sessions with progress support and gratitude practice
 - 🔔 **Smart Notifications**: Timezone-aware daily digests and deadline reminders
 - 📊 **Analytics**: Automated daily summaries and productivity insights
+- 🤖 **LangChain AI Agents**: Three specialized agents for intelligent request processing
 
 ## Development Commands
 
@@ -31,12 +32,18 @@ pytest -vv test.py
 pip install -r requirements.txt
 ```
 
+**Test AI agents:**
+```bash
+python test_ai_agents.py
+```
+
 ## Architecture
 
 ### Core Components
 
 - **handlers.py**: Main aiogram router with message handlers and middleware
-- **actions.py**: OpenAI Assistant API interactions and message processing logic
+- **actions.py**: Enhanced with AI agents integration and message processing logic
+- **ai_agents.py**: LangChain-based AI agents for intelligent request processing
 - **client.py**: OpenAI client setup and thread/assistant management
 - **assistants_factory.py**: Assistant management with YAML persistence
 - **users.py**: User access control and allowed users management
@@ -60,14 +67,23 @@ pip install -r requirements.txt
 1. Messages arrive via aiogram handlers in `handlers.py`
 2. Access control checked via `users.py` middleware
 3. Thread/assistant retrieved via `client.py` and `assistants_factory.py`
-4. Mode-specific processing in `actions.py` (Assistant API vs direct model calls vs tracker)
-5. Tracker mode handling in `tracker.py` with welcome module and AI mentor
+4. Mode-specific processing in `actions.py`:
+   - **Tracker mode**: AI agents via `process_tracker_message_with_agents()`
+   - **Assistant mode**: OpenAI Assistant API
+   - **Direct models**: GPT-4.1, o4-mini direct calls
+5. **AI Agent Processing** (tracker mode):
+   - OrchestratorAgent analyzes intent and routes requests
+   - TaskManagerAgent handles task operations
+   - EveningTrackerAgent manages reflection sessions
+   - Fallback to original `tracker.py` if agents fail
 6. Queue management via `message_queues.py` for rate limiting
 7. Response formatting and delivery
 
 ### Key Patterns
 
-- All user state persisted in YAML files (threads, assistants, users)
+- All user state persisted in YAML files (threads, assistants, users, tracker data)
+- **AI Agent Architecture**: LangChain-based agents with tool calling and natural language processing
+- **Graceful Fallback**: Automatic fallback to original tracker if AI agents fail
 - Async/await throughout with proper exception handling
 - Markdown formatting with aiogram ParseMode.MARKDOWN
 - File download to temporary directory with cleanup
@@ -88,7 +104,7 @@ Set these before running:
 
 ### Overview
 
-The tracker mode provides stress management and productivity features with a 6-step onboarding process and AI mentor integration.
+The tracker mode provides stress management and productivity features with a 6-step onboarding process, AI mentor integration, and advanced LangChain AI agents for natural language task management.
 
 ### Access Tracker Mode
 
@@ -267,18 +283,177 @@ user_id:
 **Testing Current Implementation:**
 - Run bot: `python -m gptbot`
 - Use `/mode` → select "tracker"
-- Test complete 4-phase system:
+- Test complete 5-phase system:
   - **Phase 1**: Complete welcome module flow
-  - **Phase 2**: Create, manage, and organize tasks
+  - **Phase 2**: Create, manage, and organize tasks via natural language
   - **Phase 3**: Configure notifications and timezone
-  - **Phase 4**: Run evening tracker session
+  - **Phase 4**: Run evening tracker session with AI support  
+  - **Phase 5**: Natural language queries automatically routed to AI agents
+- **Test AI Agents**: Use natural language like "создай задачу купить молоко", "покажи продуктивность"
+- **Test Agent Routing**: Try task, evening tracker, and general productivity queries
 - Verify AI mentor conversations preserve context and daily summaries
 - Check data persistence in `tracker_data.yaml`
 - Test notification system with manual digest
 - Test evening tracker with `/вечерний` command
 - Verify long-term memory in AI mentor responses
+- **Fallback Testing**: Agents gracefully fall back to original tracker on errors
 
-**Current Status**: Phase 1 (Welcome Module) + Phase 2 (Core Task Management) + Phase 3 (Notification System) + Phase 4 (Evening AI Tracker) fully implemented and functional ✅
+**Current Status**: Phase 1 (Welcome Module) + Phase 2 (Core Task Management) + Phase 3 (Notification System) + Phase 4 (Evening AI Tracker) + Phase 5 (LangChain AI Agents) fully implemented and functional ✅
+
+## Phase 5 - LangChain AI Agents Architecture ✅
+
+### Overview
+
+The tracker has been refactored to use three specialized LangChain AI agents for intelligent request processing and enhanced user experience.
+
+### AI Agents Architecture
+
+**Three-Agent System:**
+1. **TaskManagerAgent** - Handles all task-related operations
+2. **EveningTrackerAgent** - Manages evening reflection sessions  
+3. **OrchestratorAgent** - Routes requests to appropriate agents
+
+**Key Features:**
+- ✅ LangChain-based architecture with ChatOpenAI integration
+- ✅ Tool-based function calling for task operations
+- ✅ Intelligent request routing and intent recognition
+- ✅ Seamless fallback to original tracker functionality
+- ✅ Enhanced AI mentor capabilities with 30-day memory
+- ✅ Natural language task management and analysis
+
+### Agent Capabilities
+
+**TaskManagerAgent:**
+- Create, update, delete tasks via natural language
+- Task analytics and productivity insights
+- Status and priority management
+- Smart task filtering and search
+- Integration with existing task data structure
+
+**EveningTrackerAgent:**  
+- Guided evening reflection sessions
+- Intelligent progress assessment
+- Personalized support and encouragement
+- Daily summary generation with long-term memory
+- Gratitude practice facilitation
+
+**OrchestratorAgent:**
+- Intent recognition and request classification
+- Dynamic agent routing (TASK_MANAGER/EVENING_TRACKER/GENERAL)
+- Context-aware responses for general productivity questions
+- Cross-agent communication and data sharing
+
+### Technical Implementation
+
+**Core Files:**
+- `ai_agents.py` (600+ lines) - Complete LangChain agent implementation
+- `actions.py` - Enhanced with agent integration and fallback handling
+- `handlers.py` - Updated for agent-based message processing
+
+**LangChain Integration:**
+```python
+# Agent initialization
+orchestrator = initialize_agents(api_key, model)
+
+# Request processing
+result = await orchestrator.route_request(user_id, message)
+
+# Tool-based task operations
+tools = [create_task, get_tasks, update_task_status, ...]
+```
+
+**Dependencies Added:**
+```
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-core>=0.3.0
+```
+
+### Agent Communication Flow
+
+1. **Message Reception** → `actions.py:process_tracker_message_with_agents()`
+2. **Intent Analysis** → `OrchestratorAgent.route_request()`
+3. **Agent Selection** → TaskManager/EveningTracker/General handler
+4. **Tool Execution** → LangChain tools with JSON parameters
+5. **Response Generation** → Context-aware AI responses
+6. **Fallback Handling** → Original tracker functions if agents fail
+
+### Natural Language Capabilities
+
+**Task Management Examples:**
+- "создай задачу 'купить молоко' с высоким приоритетом"
+- "покажи все мои активные задачи"
+- "измени статус задачи на выполнено"
+- "какая у меня продуктивность за неделю?"
+
+**Evening Tracker Examples:**
+- "начинаем вечерний трекер"
+- "хочу подвести итоги дня"
+- "расскажи как прошел день"
+
+**General Support Examples:**
+- "как мне лучше планировать время?"
+- "что делать если прокрастинирую?"
+- "дай совет по продуктивности"
+
+### Testing and Validation
+
+**Test Coverage:**
+- Unit tests for each agent type
+- Integration tests for agent communication
+- Data persistence validation
+- Fallback mechanism testing
+- Natural language processing accuracy
+
+**Testing Command:**
+```bash
+python test_ai_agents.py
+```
+
+### Performance Benefits
+
+**Enhanced User Experience:**
+- Natural language task management
+- Intelligent context understanding
+- Personalized productivity advice
+- Seamless agent-to-agent communication
+- Robust error handling with graceful fallback
+
+**Technical Advantages:**
+- Modular agent architecture
+- Tool-based function calling
+- Improved maintainability
+- Enhanced extensibility for future features
+- Production-ready error handling
+
+### Future Development (Phase 6+)
+
+**Potential Enhancements:**
+- Multi-language support for international users
+- Voice-to-text integration with agent processing
+- Advanced analytics dashboard with AI insights
+- Calendar integration with intelligent scheduling
+- Team collaboration features with shared agents
+- Mobile app with agent-powered notifications
+
+### Usage with New Architecture
+
+**Current Functionality:**
+- All existing tracker features remain fully functional
+- Enhanced with natural language processing
+- Intelligent agent routing for optimal responses
+- Improved AI mentor with extended memory
+- Seamless transition from UI-based to conversational interface
+
+**Commands:**
+- `/mode` → "tracker" → Access enhanced agent-powered experience
+- Natural language queries automatically routed to appropriate agents
+- Existing UI navigation preserved as fallback option
+
+**Data Compatibility:**
+- Full backward compatibility with existing tracker_data.yaml
+- Enhanced data structures for agent memory and context
+- Seamless migration of existing user data and preferences
 
 ## Phase 4 - Evening AI Tracker System ✅
 
@@ -583,7 +758,7 @@ tasks:
 
 ## Summary: Complete Tracker Implementation ✅
 
-### Three-Phase Implementation Complete
+### Five-Phase Implementation Complete
 
 **Phase 1: Welcome Module (6-Step Onboarding)** ✅
 - Empathetic user experience with anxiety assessment
@@ -605,11 +780,28 @@ tasks:
 - Advanced settings interface with real-time preview
 - Smart notification content with personalized insights
 
+**Phase 4: Evening AI Tracker** ✅
+- Guided daily reflection sessions with AI support
+- Task-by-task progress review and encouragement
+- Gratitude practice and daily summaries
+- 30-day long-term memory for AI mentor context
+- Personalized stress management and productivity insights
+
+**Phase 5: LangChain AI Agents** ✅
+- Three specialized agents: TaskManager, EveningTracker, Orchestrator
+- Natural language task management and query processing
+- Intelligent request routing and intent recognition
+- Tool-based function calling with JSON parameters
+- Graceful fallback to original tracker functionality
+
 ### Technical Architecture
 
 **Core Files:**
 - `tracker.py` (1000+ lines) - Complete tracker implementation
 - `notifications.py` (400+ lines) - Notification management system
+- `ai_agents.py` (600+ lines) - LangChain AI agents implementation
+- `actions.py` - Enhanced with AI agents integration
+- `handlers.py` - Updated for agent-based message processing
 - `main.py` - Enhanced with notification system integration
 
 **Data Structure:**
@@ -643,35 +835,56 @@ user_data:
     daily_digest: true
     deadline_reminders: true
     new_task_notifications: false
+  
+  # Phase 4 - Evening AI Tracker
+  current_evening_session: null
+  daily_summaries:
+    - date: "2025-06-14"
+      tasks_reviewed: 3
+      tasks_with_progress: 2
+      productivity_level: "high"
+      summary_text: "Strong day with good progress..."
+      
+  # Phase 5 - AI Agents
+  # Agent routing and responses handled by ai_agents.py
+  # All existing data structures remain compatible
 ```
 
 ### Feature Matrix
 
-| Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Status |
-|---------|---------|---------|---------|---------|---------|
-| User Onboarding | ✅ | - | - | - | Complete |
-| Anxiety Assessment | ✅ | - | - | - | Complete |
-| AI Mentor Chat | ✅ | ✅ | ✅ | ✅ | Complete |
-| Task CRUD | - | ✅ | - | - | Complete |
-| Priority Management | - | ✅ | - | - | Complete |
-| Status Tracking | - | ✅ | - | - | Complete |
-| Interactive UI | ✅ | ✅ | ✅ | ✅ | Complete |
-| Daily Digest | - | - | ✅ | - | Complete |
-| Deadline Alerts | - | - | ✅ | - | Complete |
-| Timezone Support | - | - | ✅ | ✅ | Complete |
-| Settings Interface | - | - | ✅ | - | Complete |
-| Evening AI Tracker | - | - | - | ✅ | Complete |
-| Long-term Memory | - | - | - | ✅ | Complete |
-| Daily Summaries | - | - | - | ✅ | Complete |
-| Progress Support | - | - | - | ✅ | Complete |
-| Gratitude Practice | - | - | - | ✅ | Complete |
+| Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Status |
+|---------|---------|---------|---------|---------|---------|---------|
+| User Onboarding | ✅ | - | - | - | - | Complete |
+| Anxiety Assessment | ✅ | - | - | - | - | Complete |
+| AI Mentor Chat | ✅ | ✅ | ✅ | ✅ | ✅ | Complete |
+| Task CRUD | - | ✅ | - | - | ✅ | Complete |
+| Priority Management | - | ✅ | - | - | ✅ | Complete |
+| Status Tracking | - | ✅ | - | - | ✅ | Complete |
+| Interactive UI | ✅ | ✅ | ✅ | ✅ | - | Complete |
+| Daily Digest | - | - | ✅ | - | - | Complete |
+| Deadline Alerts | - | - | ✅ | - | - | Complete |
+| Timezone Support | - | - | ✅ | ✅ | - | Complete |
+| Settings Interface | - | - | ✅ | - | - | Complete |
+| Evening AI Tracker | - | - | - | ✅ | ✅ | Complete |
+| Long-term Memory | - | - | - | ✅ | ✅ | Complete |
+| Daily Summaries | - | - | - | ✅ | ✅ | Complete |
+| Progress Support | - | - | - | ✅ | ✅ | Complete |
+| Gratitude Practice | - | - | - | ✅ | ✅ | Complete |
+| Natural Language Processing | - | - | - | - | ✅ | Complete |
+| AI Agent Routing | - | - | - | - | ✅ | Complete |
+| Tool-based Function Calling | - | - | - | - | ✅ | Complete |
+| Intelligent Intent Recognition | - | - | - | - | ✅ | Complete |
+| Graceful Fallback System | - | - | - | - | ✅ | Complete |
 
 ### Production Readiness
 
 **Completed Features:** 
-- ✅ Complete user workflow from onboarding to daily reflection
-- ✅ Persistent data storage with YAML (tasks, sessions, summaries)
-- ✅ Error handling and logging throughout
+- ✅ Complete user workflow from onboarding to AI-powered daily reflection
+- ✅ Natural language task management with LangChain AI agents
+- ✅ Intelligent request routing and intent recognition
+- ✅ Persistent data storage with YAML (tasks, sessions, summaries, agent data)
+- ✅ Comprehensive error handling and graceful fallback systems
+- ✅ Tool-based function calling with JSON parameter handling
 - ✅ Timezone-aware operations  
 - ✅ Background notification system
 - ✅ Evening AI tracker with long-term memory
@@ -682,15 +895,19 @@ user_data:
 **Ready for Deployment:**
 The tracker is now a complete, production-ready stress management and productivity tool with:
 - Trust-building onboarding experience
-- Full task lifecycle management
-- Intelligent notification system
+- **Natural language task management** via LangChain AI agents
+- **Intelligent request routing** with intent recognition
+- **Multi-agent architecture** for specialized functionality
+- Intelligent notification system with timezone support
 - AI-powered mentoring with 30-day memory
 - Evening reflection and gratitude practice
 - Automated daily summaries and insights
-- Robust technical architecture
+- **Graceful fallback** to original tracker if agents fail
+- Robust technical architecture with comprehensive error handling
 
-**Usage:** `/mode` → "tracker" → Complete 4-phase experience
+**Usage:** `/mode` → "tracker" → Complete 5-phase experience
 - **Phase 1**: Welcome & Assessment
-- **Phase 2**: Task Management  
+- **Phase 2**: Natural Language Task Management  
 - **Phase 3**: Notifications & Timezone
 - **Phase 4**: Evening AI Tracker & Long-term Memory
+- **Phase 5**: LangChain AI Agents with Intelligent Routing

@@ -15,11 +15,26 @@ from .modes import get_mode
 from .file_search import search_context
 from .constants import GPT4_MODEL, O4_MINI_MODEL
 from .tracker import process_tracker_message
+from .ai_agents import initialize_agents
+from . import env
 
 
 logger = create_logger(__name__)
 
 model_history = {}
+
+# Инициализация AI-агентов
+orchestrator_agent = None
+
+def get_orchestrator():
+    global orchestrator_agent
+    if orchestrator_agent is None:
+        try:
+            orchestrator_agent = initialize_agents(env.API_KEY, GPT4_MODEL)
+            logger.info("AI agents initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize AI agents: {e}")
+    return orchestrator_agent
 
 
 async def change_assistant(message: types.Message):
@@ -50,7 +65,7 @@ async def handle_response(message: types.Message):
 
   mode = await get_mode(user_id)
   if mode == "tracker":
-    await process_tracker_message(message)
+    await process_tracker_message_with_agents(message)
     return
   elif mode != "assistant":
     await process_model_message(user_id, message)
@@ -189,3 +204,47 @@ async def process_model_message(user_id: int, message: types.Message):
   )
   
   await message.answer(reply)
+
+
+async def process_tracker_message_with_agents(message: types.Message):
+    """Обработка сообщений трекера через AI-агентов"""
+    user_id = message.from_user.id
+    orchestrator = get_orchestrator()
+    
+    if not orchestrator:
+        logger.error("Orchestrator agent not available, falling back to original tracker")
+        await process_tracker_message(message)
+        return
+    
+    try:
+        # Отправляем запрос оркестратору
+        result = await orchestrator.route_request(user_id, message.text)
+        
+        if result["agent"] == "error":
+            logger.error(f"Error from orchestrator: {result['response']}")
+            await message.answer("Произошла ошибка при обработке запроса.")
+        else:
+            # Проверяем длину ответа и разбиваем если необходимо
+            response = result["response"]
+            if len(response) > 4096:
+                # Разбиваем длинное сообщение на части
+                chunks = [response[i:i+4096] for i in range(0, len(response), 4096)]
+                for chunk in chunks:
+                    await message.answer(chunk)
+            else:
+                await message.answer(response)
+                
+        logger.info(f"Tracker message processed by agent: {result['agent']}")
+        
+    except Exception as e:
+        logger.error(f"Error processing tracker message with agents: {e}")
+        # Fallback к оригинальной функции
+        await process_tracker_message(message)
+
+
+async def process_tracker_callback_with_agents(callback_query: types.CallbackQuery):
+    """Обработка callback запросов трекера через AI-агентов"""
+    # Пока что оставляем callback обработку как есть,
+    # так как она в основном связана с UI навигацией
+    from .tracker import process_tracker_callback
+    await process_tracker_callback(callback_query)

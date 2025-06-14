@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
 from pathlib import Path
 from . import env
-from .actions import change_assistant, handle_response, change_mode, clear_history
+from .actions import change_assistant, handle_response, change_mode, clear_history, process_tracker_callback_with_agents
 from .file_search import process_pdf, clear_store
 from .client import get_thread, get_assistant, asst_filter
 from .logger import create_logger
@@ -191,7 +191,7 @@ async def on_pdf(message: types.Message, name: str) -> None:
 
 @router.callback_query(F.data.startswith("tracker_"))
 async def on_tracker_callback(callback_query: types.CallbackQuery) -> None:
-  await process_tracker_callback(callback_query)
+  await process_tracker_callback_with_agents(callback_query)
 
 
 @router.message(F.voice)
