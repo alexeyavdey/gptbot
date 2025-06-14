@@ -35,6 +35,7 @@ pip install -r requirements.txt
 **Test AI agents:**
 ```bash
 python test_ai_agents.py
+python test_agents_sqlite.py
 ```
 
 ## Architecture
@@ -44,10 +45,11 @@ python test_ai_agents.py
 - **handlers.py**: Main aiogram router with message handlers and middleware
 - **actions.py**: Enhanced with AI agents integration and message processing logic
 - **ai_agents.py**: LangChain-based AI agents for intelligent request processing
+- **task_database.py**: SQLite database manager for task storage and retrieval
 - **client.py**: OpenAI client setup and thread/assistant management
 - **assistants_factory.py**: Assistant management with YAML persistence
 - **users.py**: User access control and allowed users management
-- **modes.py**: Bot operation modes (assistant, gpt-4.1, o4-mini, tracker)
+- **modes.py**: Bot operation modes (assistant, gpt-4.1, o3, tracker)
 - **tracker.py**: Task tracker with 6-step onboarding and AI mentor system
 - **file_search.py**: PDF processing and RAG functionality
 - **voice.py**: Voice message transcription via Whisper
@@ -57,7 +59,8 @@ python test_ai_agents.py
 
 - **tutors.yaml**: Assistant configurations and user preferences
 - **threads.yaml**: Thread state persistence
-- **tracker_data.yaml**: Tracker user data and AI mentor conversation history
+- **tracker_data.yaml**: Tracker user data and AI mentor conversation history (legacy)
+- **tracker.db**: SQLite database for tasks, users, evening sessions, and daily summaries
 - **allowed_users.yaml**: User access control list
 - **config.py**: Bot behavior settings (response delays, polling intervals)
 - **env.py**: Environment variable definitions
@@ -70,7 +73,7 @@ python test_ai_agents.py
 4. Mode-specific processing in `actions.py`:
    - **Tracker mode**: AI agents via `process_tracker_message_with_agents()`
    - **Assistant mode**: OpenAI Assistant API
-   - **Direct models**: GPT-4.1, o4-mini direct calls
+   - **Direct models**: GPT-4.1, o3 direct calls
 5. **AI Agent Processing** (tracker mode):
    - OrchestratorAgent analyzes intent and routes requests
    - TaskManagerAgent handles task operations
@@ -81,7 +84,7 @@ python test_ai_agents.py
 
 ### Key Patterns
 
-- All user state persisted in YAML files (threads, assistants, users, tracker data)
+- User state persisted in YAML files (threads, assistants, users) and SQLite database (tasks, analytics)
 - **AI Agent Architecture**: LangChain-based agents with tool calling and natural language processing
 - **Graceful Fallback**: Automatic fallback to original tracker if AI agents fail
 - Async/await throughout with proper exception handling
@@ -289,13 +292,25 @@ user_id:
   - **Phase 3**: Configure notifications and timezone
   - **Phase 4**: Run evening tracker session with AI support  
   - **Phase 5**: Natural language queries automatically routed to AI agents
-- **Test AI Agents**: Use natural language like "создай задачу купить молоко", "покажи продуктивность"
-- **Test Agent Routing**: Try task, evening tracker, and general productivity queries
-- Verify AI mentor conversations preserve context and daily summaries
-- Check data persistence in `tracker_data.yaml`
-- Test notification system with manual digest
-- Test evening tracker with `/вечерний` command
-- Verify long-term memory in AI mentor responses
+
+**AI Agent Testing Commands:**
+- **Task Creation**: "создай задачу купить молоко с высоким приоритетом"
+- **Task Count**: "сколько у меня задач"
+- **Task List**: "покажи мои задачи"
+- **Analytics**: "покажи мою продуктивность"
+- **Evening Tracker**: "начинаем вечерний трекер"
+
+**SQLite Database Testing:**
+```bash
+python test_agents_sqlite.py
+python test_final_agents.py
+```
+
+**Data Storage:**
+- Tasks and analytics stored in SQLite (`tracker.db`)
+- User settings remain in YAML (`tracker_data.yaml`)
+- Automatic database schema initialization
+- CRUD operations with proper error handling
 - **Fallback Testing**: Agents gracefully fall back to original tracker on errors
 
 **Current Status**: Phase 1 (Welcome Module) + Phase 2 (Core Task Management) + Phase 3 (Notification System) + Phase 4 (Evening AI Tracker) + Phase 5 (LangChain AI Agents) fully implemented and functional ✅
@@ -369,6 +384,26 @@ langchain-openai>=0.2.0
 langchain-core>=0.3.0
 ```
 
+**SQLite Database Schema:**
+```sql
+-- Tasks table
+CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    priority TEXT DEFAULT 'medium',
+    status TEXT DEFAULT 'pending',
+    created_at INTEGER,
+    updated_at INTEGER,
+    due_date INTEGER,
+    completed_at INTEGER
+);
+
+-- Additional tables: tracker_users, evening_sessions, daily_summaries
+-- Full schema in task_database.py
+```
+
 ### Agent Communication Flow
 
 1. **Message Reception** → `actions.py:process_tracker_message_with_agents()`
@@ -405,10 +440,19 @@ langchain-core>=0.3.0
 - Fallback mechanism testing
 - Natural language processing accuracy
 
-**Testing Command:**
+**Testing Commands:**
 ```bash
 python test_ai_agents.py
+python test_agents_sqlite.py  
+python test_final_agents.py
 ```
+
+**Issue Resolution:**
+- ✅ **Fixed**: AI agents now properly invoke tools and save data to SQLite
+- ✅ **Fixed**: Task creation and counting works correctly with natural language
+- ✅ **Fixed**: Improved parsing of task titles from user messages
+- ✅ **Fixed**: Keyword-based routing instead of LLM routing for reliability
+- ✅ **Implemented**: Comprehensive SQLite database with full CRUD operations
 
 ### Performance Benefits
 
@@ -799,7 +843,8 @@ tasks:
 **Core Files:**
 - `tracker.py` (1000+ lines) - Complete tracker implementation
 - `notifications.py` (400+ lines) - Notification management system
-- `ai_agents.py` (600+ lines) - LangChain AI agents implementation
+- `ai_agents.py` (700+ lines) - LangChain AI agents implementation
+- `task_database.py` (300+ lines) - SQLite database manager
 - `actions.py` - Enhanced with AI agents integration
 - `handlers.py` - Updated for agent-based message processing
 - `main.py` - Enhanced with notification system integration

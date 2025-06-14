@@ -107,7 +107,7 @@ async def on_tutor(message: types.Message) -> None:
 
 @router.message(Command("mode"))
 async def on_mode(message: types.Message) -> None:
-  modes = ["assistant", "gpt-4.1", "o4-mini", "tracker"]
+  modes = ["assistant", "gpt-4.1", "o3", "tracker"]
   await message.answer(
       _t("bot.new_mode"),
       reply_markup=types.ReplyKeyboardMarkup(

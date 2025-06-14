@@ -13,9 +13,9 @@ from .users import is_group_bot
 from .message_queues import QueueController, thread_lock
 from .modes import get_mode
 from .file_search import search_context
-from .constants import GPT4_MODEL, O4_MINI_MODEL
+from .constants import GPT4_MODEL, O3_MODEL
 from .tracker import process_tracker_message
-from .ai_agents import initialize_agents
+from .enhanced_ai_agents import initialize_enhanced_agents
 from . import env
 
 
@@ -30,10 +30,10 @@ def get_orchestrator():
     global orchestrator_agent
     if orchestrator_agent is None:
         try:
-            orchestrator_agent = initialize_agents(env.API_KEY, GPT4_MODEL)
-            logger.info("AI agents initialized successfully")
+            orchestrator_agent = initialize_enhanced_agents(env.API_KEY, GPT4_MODEL)
+            logger.info("Enhanced AI agents initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize AI agents: {e}")
+            logger.error(f"Failed to initialize enhanced AI agents: {e}")
     return orchestrator_agent
 
 
@@ -183,7 +183,7 @@ async def process_model_message(user_id: int, message: types.Message):
   history.append({"role": "user", "content": message.text})
 
   mode = await get_mode(user_id)
-  model = GPT4_MODEL if mode == "gpt-4.1" else O4_MINI_MODEL
+  model = GPT4_MODEL if mode == "gpt-4.1" else O3_MODEL
 
   response = await client.chat.completions.create(
       model=model,
