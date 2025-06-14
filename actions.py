@@ -17,6 +17,7 @@ from .constants import GPT4_MODEL, O3_MODEL
 from .tracker import process_tracker_message
 from .enhanced_ai_agents import initialize_enhanced_agents
 from . import env
+import os
 
 
 logger = create_logger(__name__)
