@@ -141,9 +141,9 @@ class TaskManagementAgent(BaseAgent):
         Параметры для инструментов передавай в JSON формате с обязательным полем user_id.
         
         Примеры:
-        - Для подсчета задач: get_tasks с параметрами {"user_id": 123}
-        - Для аналитики: get_analytics с параметрами {"user_id": 123}
-        - Для создания: create_task с параметрами {"user_id": 123, "title": "название", "priority": "medium"}
+        - Для подсчета задач: get_tasks с параметрами {{"user_id": 123}}
+        - Для аналитики: get_analytics с параметрами {{"user_id": 123}}
+        - Для создания: create_task с параметрами {{"user_id": 123, "title": "название", "priority": "medium"}}
         
         Всегда отвечай на русском языке, будь дружелюбным и конструктивным.
         """
@@ -326,7 +326,7 @@ class TaskManagementAgent(BaseAgent):
             
             # Создаем агента с tools
             prompt = ChatPromptTemplate.from_messages([
-                ("system", self.system_prompt + f"\n\nИдентификатор пользователя: {user_id}"),
+                ("system", self.system_prompt + f"\n\nТекущий пользователь ID: {user_id}. Используй этот ID во всех вызовах инструментов."),
                 ("human", "{input}"),
                 ("placeholder", "{agent_scratchpad}")
             ])
