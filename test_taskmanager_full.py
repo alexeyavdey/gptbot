@@ -133,7 +133,7 @@ async def test_edge_cases():
         from enhanced_ai_agents import TaskManagementAgent
         from constants import GPT4_MODEL
         
-        api_key = "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"
+        api_key = env.API_KEY or "your-openai-api-key-here"
         test_user_id = 999888778  # Другой тестовый пользователь
         
         agent = TaskManagementAgent(api_key, GPT4_MODEL)
