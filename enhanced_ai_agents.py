@@ -52,9 +52,7 @@ class BaseAgent:
     
     def __init__(self, api_key: str, model: str = "gpt-4.1"):
         # Устанавливаем переменную окружения для LangChain
-        import os
-        os.environ['OPENAI_API_KEY'] = api_key
-        
+                
         self.llm = ChatOpenAI(
             api_key=api_key,
             model=model,

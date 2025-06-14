@@ -22,6 +22,7 @@ from . import env
 logger = create_logger(__name__)
 
 model_history = {}
+api_key=os.environ['OPENAI_API_KEY']
 
 # Инициализация AI-агентов
 orchestrator_agent = None
@@ -30,8 +31,8 @@ def get_orchestrator():
     global orchestrator_agent
     if orchestrator_agent is None:
         try:
-            logger.info(f"api: {env.API_KEY}")
-            orchestrator_agent = initialize_enhanced_agents(env.API_KEY, GPT4_MODEL)
+            logger.info(f"api: {api_key}")
+            orchestrator_agent = initialize_enhanced_agents(api_key, GPT4_MODEL)
             logger.info("Enhanced AI agents initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize enhanced AI agents: {e}")
