@@ -255,14 +255,15 @@ class TaskDatabase:
                 cursor = conn.execute("""
                     SELECT 
                         COUNT(*) as total_tasks,
-                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-                        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
-                        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_tasks
+                        COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed_tasks,
+                        COALESCE(SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END), 0) as in_progress_tasks,
+                        COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending_tasks
                     FROM tasks 
                     WHERE user_id = ?
                 """, (user_id,))
                 
                 stats = dict(cursor.fetchone())
+                logger.debug(f"Raw stats from database for user {user_id}: {stats}")
                 
                 # Статистика по приоритетам
                 cursor = conn.execute("""
@@ -277,8 +278,8 @@ class TaskDatabase:
                     priority_stats[row['priority']] = row['count']
                 
                 # Вычисляем процент завершения
-                total = stats['total_tasks']
-                completed = stats['completed_tasks']
+                total = stats.get('total_tasks', 0) or 0
+                completed = stats.get('completed_tasks', 0) or 0
                 completion_rate = (completed / total * 100) if total > 0 else 0
                 
                 analytics = {

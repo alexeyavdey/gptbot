@@ -449,9 +449,18 @@ class AIMentorAgent(BaseAgent):
             tasks = self.db.get_tasks(user_id)
             analytics = self.db.get_task_analytics(user_id)
             
+            # Сильная защита от None
+            total_tasks = analytics.get('total_tasks', 0)
+            if total_tasks is None or not isinstance(total_tasks, (int, float)):
+                total_tasks = 0
+                
+            completion_rate = analytics.get('completion_rate', 0)
+            if completion_rate is None or not isinstance(completion_rate, (int, float)):
+                completion_rate = 0
+            
             return {
-                "total_tasks": analytics.get('total_tasks', 0),
-                "completion_rate": analytics.get('completion_rate', 0),
+                "total_tasks": int(total_tasks),
+                "completion_rate": float(completion_rate),
                 "recent_tasks": tasks[:5] if tasks else []
             }
         except Exception as e:
@@ -582,17 +591,34 @@ class OrchestratorAgent(BaseAgent):
             # Здесь должна быть логика получения состояния из базы/файлов
             # Пока что возвращаем базовое состояние
             analytics = self.db.get_task_analytics(user_id)
+            logger.info(f"FIXED_VERSION: Raw analytics for user {user_id}: {analytics}")
+            
+            # Очень сильная защита от None и других неожиданных типов
+            total_tasks = analytics.get('total_tasks', 0)
+            if total_tasks is None or not isinstance(total_tasks, (int, float)):
+                total_tasks = 0
+                
+            completed_tasks = analytics.get('completed_tasks', 0)
+            if completed_tasks is None or not isinstance(completed_tasks, (int, float)):
+                completed_tasks = 0
+            
+            logger.debug(f"Processed values - total_tasks: {total_tasks} (type: {type(total_tasks)}), completed_tasks: {completed_tasks} (type: {type(completed_tasks)})")
+            
+            active_tasks = int(total_tasks) - int(completed_tasks)
+            logger.debug(f"Calculated active_tasks: {active_tasks}")
             
             return {
                 "welcome_completed": True,  # Нужно получать из tracker_data.yaml
-                "total_tasks": analytics.get('total_tasks', 0),
-                "active_tasks": analytics.get('total_tasks', 0) - analytics.get('completed_tasks', 0),
-                "completion_rate": analytics.get('completion_rate', 0),
+                "total_tasks": total_tasks,
+                "active_tasks": active_tasks,
+                "completion_rate": analytics.get('completion_rate', 0) or 0,
                 "evening_state": "starting",  # Нужно получать из текущей сессии
                 "welcome_step": "completed"
             }
         except Exception as e:
             logger.error(f"Error getting user state: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return {}
     
     def _format_user_state(self, user_state: Dict) -> str:

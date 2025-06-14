@@ -36,6 +36,12 @@ def get_orchestrator():
             logger.error(f"Failed to initialize enhanced AI agents: {e}")
     return orchestrator_agent
 
+def reset_orchestrator():
+    """Принудительно пересоздать оркестратор (для применения обновлений кода)"""
+    global orchestrator_agent
+    orchestrator_agent = None
+    logger.info("Orchestrator reset - will be recreated on next use")
+
 
 async def change_assistant(message: types.Message):
   tutor = message.text
