@@ -131,7 +131,20 @@ class TaskManagementAgent(BaseAgent):
         - Предоставление аналитики и статистики
         - Помощь в планировании и приоритизации
         
-        ВАЖНО: Используй доступные инструменты для выполнения операций с задачами.
+        ВАЖНО: ВСЕГДА используй доступные инструменты для операций с задачами:
+        - Для получения количества/списка задач: используй get_tasks
+        - Для создания задач: используй create_task
+        - Для аналитики и статистики: используй get_analytics
+        - Для обновления задач: используй update_task
+        - Для удаления задач: используй delete_task
+        
+        Параметры для инструментов передавай в JSON формате с обязательным полем user_id.
+        
+        Примеры:
+        - Для подсчета задач: get_tasks с параметрами {"user_id": 123}
+        - Для аналитики: get_analytics с параметрами {"user_id": 123}
+        - Для создания: create_task с параметрами {"user_id": 123, "title": "название", "priority": "medium"}
+        
         Всегда отвечай на русском языке, будь дружелюбным и конструктивным.
         """
     
@@ -183,13 +196,10 @@ class TaskManagementAgent(BaseAgent):
             self.db.ensure_user_exists(user_id)
             task_id = self.db.create_task(user_id, title, description, priority, due_date)
             
-            return json.dumps({
-                "success": True,
-                "task_id": task_id,
-                "message": f"Задача '{title}' создана с приоритетом {priority}"
-            })
+            priority_emoji = {'urgent': '🔥', 'high': '⚡', 'medium': '📋', 'low': '📝'}.get(priority, '📋')
+            return f"✅ Задача '{title}' создана с приоритетом {priority} {priority_emoji}!"
         except Exception as e:
-            return json.dumps({"success": False, "error": str(e)})
+            return f"Ошибка создания задачи: {str(e)}"
     
     def _get_tasks(self, params: str) -> str:
         """Получение списка задач"""
@@ -201,9 +211,26 @@ class TaskManagementAgent(BaseAgent):
             self.db.ensure_user_exists(user_id)
             tasks = self.db.get_tasks(user_id, status)
             
-            return json.dumps({"success": True, "tasks": tasks})
+            if not tasks:
+                return "У пользователя пока нет задач."
+            
+            # Форматируем красивый ответ
+            if status:
+                response = f"Задачи со статусом '{status}' ({len(tasks)}):\n"
+            else:
+                response = f"Все задачи пользователя ({len(tasks)}):\n"
+            
+            for i, task in enumerate(tasks[:10], 1):
+                priority_emoji = {'urgent': '🔥', 'high': '⚡', 'medium': '📋', 'low': '📝'}.get(task['priority'], '📋')
+                status_emoji = {'pending': '⏳', 'in_progress': '🔄', 'completed': '✅', 'cancelled': '❌'}.get(task['status'], '📋')
+                response += f"{i}. {priority_emoji} {task['title']} {status_emoji}\n"
+            
+            if len(tasks) > 10:
+                response += f"... и еще {len(tasks) - 10} задач"
+            
+            return response
         except Exception as e:
-            return json.dumps({"success": False, "error": str(e)})
+            return f"Ошибка получения задач: {str(e)}"
     
     def _update_task(self, params: str) -> str:
         """Обновление задачи"""
@@ -253,9 +280,26 @@ class TaskManagementAgent(BaseAgent):
             self.db.ensure_user_exists(user_id)
             analytics = self.db.get_task_analytics(user_id)
             
-            return json.dumps({"success": True, "analytics": analytics})
+            if analytics['total_tasks'] == 0:
+                return "Пока нет данных для аналитики. Создайте несколько задач!"
+            
+            response = f"📈 Ваша продуктивность:\n\n"
+            response += f"• Всего задач: {analytics['total_tasks']}\n"
+            response += f"• Завершено: {analytics['completed_tasks']}\n"
+            response += f"• В работе: {analytics['in_progress_tasks']}\n"
+            response += f"• Ожидают: {analytics['pending_tasks']}\n"
+            response += f"• Процент завершения: {analytics['completion_rate']:.1f}%\n"
+            
+            if analytics['completion_rate'] >= 70:
+                response += "\n🌟 Отличная продуктивность!"
+            elif analytics['completion_rate'] >= 50:
+                response += "\n👍 Хороший прогресс!"
+            else:
+                response += "\n💪 Есть куда расти!"
+            
+            return response
         except Exception as e:
-            return json.dumps({"success": False, "error": str(e)})
+            return f"Ошибка получения аналитики: {str(e)}"
     
     def _filter_tasks(self, params: str) -> str:
         """Фильтрация задач"""
@@ -278,6 +322,8 @@ class TaskManagementAgent(BaseAgent):
     async def process_task_request(self, user_id: int, message: str) -> str:
         """Обработка запроса по управлению задачами"""
         try:
+            logger.info(f"TaskManagementAgent processing: '{message}' for user {user_id}")
+            
             # Создаем агента с tools
             prompt = ChatPromptTemplate.from_messages([
                 ("system", self.system_prompt + f"\n\nИдентификатор пользователя: {user_id}"),
@@ -286,13 +332,16 @@ class TaskManagementAgent(BaseAgent):
             ])
             
             agent = create_openai_tools_agent(self.llm, self.tools, prompt)
-            agent_executor = AgentExecutor(agent=agent, tools=self.tools, verbose=False)
+            agent_executor = AgentExecutor(agent=agent, tools=self.tools, verbose=True)
             
             result = await agent_executor.ainvoke({"input": message})
+            logger.info(f"LangChain agent result: {result}")
             return result.get("output", "Не удалось обработать запрос")
             
         except Exception as e:
             logger.error(f"Error in TaskManagementAgent: {e}")
+            import traceback
+            logger.error(f"TaskManagementAgent traceback: {traceback.format_exc()}")
             return "Извините, произошла ошибка при обработке запроса по задачам."
 
 
