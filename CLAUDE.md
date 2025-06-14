@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Telegram bot that integrates OpenAI's Assistant API with aiogram 3.4+. The bot supports multiple assistants, voice messages via Whisper, PDF processing with RAG, voice calls through Vapi.ai integration, and a task tracker with AI mentor for stress management and productivity.
+This is a Telegram bot that integrates OpenAI's Assistant API with aiogram 3.4+. The bot supports multiple assistants, voice messages via Whisper, PDF processing with RAG, voice calls through Vapi.ai integration, and a comprehensive task tracker with AI mentor for stress management and productivity.
+
+**Key Tracker Features (4 Complete Phases):**
+- 📋 **Task Management**: Full CRUD with priorities, statuses, and filtering
+- 🧠 **AI Mentor**: Context-aware guidance with 30-day long-term memory  
+- 🌙 **Evening Tracker**: Daily reflection sessions with progress support and gratitude practice
+- 🔔 **Smart Notifications**: Timezone-aware daily digests and deadline reminders
+- 📊 **Analytics**: Automated daily summaries and productivity insights
 
 ## Development Commands
 
@@ -197,7 +204,7 @@ user_id:
 - ✅ **Phase 2: Core Task Management** - Completed (January 2025)  
 - ✅ **Phase 3: Notification System** - Completed (January 2025)
 
-**Next Development Priorities (Phase 4):**
+**Next Development Priorities (Phase 5):**
 
 1. **Advanced Task Features**
    - Task deadline setting UI (deadlines work in background)
@@ -205,20 +212,25 @@ user_id:
    - Task categories and tags
    - Task templates for common workflows
    - Bulk task operations (mark multiple as complete)
+   - Subtasks and task hierarchies
+   - Task dependencies and blocking relationships
 
-2. **Enhanced Analytics**
+2. **Enhanced Analytics & Insights**
    - Productivity metrics dashboard
    - Stress level tracking over time
    - Task completion patterns analysis
    - Weekly/monthly productivity reports
    - Goal achievement tracking
+   - Evening tracker insights visualization
+   - Burnout and overload detection
 
-3. **AI Mentor Enhancements**
-   - Task-specific advice integration
-   - Proactive check-ins based on user anxiety level
-   - Personalized stress management techniques
-   - Context-aware productivity suggestions
-   - Integration with task completion patterns
+3. **Advanced AI Mentor Features**
+   - Proactive check-ins based on user anxiety level and productivity patterns
+   - Personalized stress management techniques based on daily summaries
+   - Context-aware productivity suggestions using long-term memory
+   - Automatic evening tracker scheduling suggestions
+   - Mood-based task prioritization recommendations
+   - Weekly/monthly reflection sessions
 
 4. **Advanced Notification Features**
    - Custom notification schedules per user
@@ -226,6 +238,7 @@ user_id:
    - Notification snoozing and postponing
    - Integration with external calendar systems
    - Reminder escalation for overdue tasks
+   - Evening tracker reminder notifications
 
 5. **User Experience Improvements**
    - Task search and filtering by keywords
@@ -233,19 +246,204 @@ user_id:
    - Export/import functionality for tasks
    - Multi-language support
    - Dark/light theme preferences
+   - Mobile-optimized interface improvements
+   - Voice input for evening tracker responses
+
+6. **Evening Tracker Enhancements**
+   - Customizable reflection questions
+   - Mood tracking integration
+   - Weekly gratitude summaries
+   - Progress photos/attachments support
+   - Team/family sharing of daily summaries
+   - Integration with habit tracking
+
+7. **Integration & Automation**
+   - Calendar synchronization (Google, Outlook)
+   - Task import from project management tools
+   - Automated task creation from emails/messages
+   - API for third-party integrations
+   - Webhook support for external triggers
 
 **Testing Current Implementation:**
 - Run bot: `python -m gptbot`
 - Use `/mode` → select "tracker"
-- Test complete 3-phase system:
+- Test complete 4-phase system:
   - **Phase 1**: Complete welcome module flow
   - **Phase 2**: Create, manage, and organize tasks
   - **Phase 3**: Configure notifications and timezone
-- Verify AI mentor conversations preserve context
+  - **Phase 4**: Run evening tracker session
+- Verify AI mentor conversations preserve context and daily summaries
 - Check data persistence in `tracker_data.yaml`
 - Test notification system with manual digest
+- Test evening tracker with `/вечерний` command
+- Verify long-term memory in AI mentor responses
 
-**Current Status**: Phase 1 (Welcome Module) + Phase 2 (Core Task Management) + Phase 3 (Notification System) fully implemented and functional ✅
+**Current Status**: Phase 1 (Welcome Module) + Phase 2 (Core Task Management) + Phase 3 (Notification System) + Phase 4 (Evening AI Tracker) fully implemented and functional ✅
+
+## Phase 4 - Evening AI Tracker System ✅
+
+### Overview
+
+The evening AI tracker provides personalized daily reflection sessions where users review each active task, receive AI support, and end with gratitude practice. All sessions are stored as daily summaries in the AI mentor's long-term memory.
+
+### Core Features
+
+**Session Flow:**
+1. **Task Review** - Goes through each active task (pending/in-progress)
+2. **Progress Check** - "What did you accomplish today on this task?"
+3. **AI Support** - Encouraging response for any progress level
+4. **Help Offer** - If no progress: "How can I help with this task?"
+5. **Practical Help** - AI provides actionable advice for obstacles
+6. **Gratitude Question** - "What are you grateful for about yourself today?"
+7. **Daily Summary** - AI generates and saves comprehensive day summary
+
+**Smart Features:**
+- **Availability Check** - Only available when there are active tasks and no session today
+- **Timezone Aware** - Works with user's local date/time
+- **Progress Detection** - Automatically detects if user made progress or needs help
+- **Long-term Memory** - Last 30 days stored in AI mentor's context
+- **Emotional Support** - Non-judgmental, encouraging responses regardless of progress
+
+### Data Structure
+
+**Evening Session:**
+```yaml
+current_evening_session:
+  user_id: 123
+  date: "2025-06-14"
+  state: "task_review|gratitude|summary|completed"
+  task_reviews:
+    - task_id: "uuid"
+      task_title: "Task name"
+      progress_description: "What user accomplished"
+      needs_help: boolean
+      help_provided: "User's help request"
+      ai_support: "AI encouragement"
+      completed: boolean
+  current_task_index: 0
+  gratitude_answer: "User's gratitude response"
+  summary: "AI-generated day summary"
+  ai_conversation: [{role: "user|assistant", content: "..."}]
+```
+
+**Daily Summary (Long-term Memory):**
+```yaml
+daily_summaries:
+  - date: "2025-06-14"
+    tasks_reviewed: 3
+    tasks_with_progress: 2
+    tasks_needing_help: 1
+    gratitude_theme: "Completed important presentation"
+    productivity_level: "high|medium|low"
+    summary_text: "Strong day with progress on most tasks..."
+    key_insights: ["User struggles with task X", "Good momentum on Y"]
+    mood_indicators: ["confident", "stressed about deadlines"]
+```
+
+### User Interface
+
+**Access Points:**
+- Main menu button "🌙 Вечерний трекер" (appears when available)
+- Command: `/вечерний`, `/evening`, `вечерний трекер`
+- Automatically hidden if no active tasks or already completed today
+
+**Session UI:**
+- Progress indicator: "(2/4)" for current task
+- Clear task names and context
+- Supportive messaging throughout
+- Final summary with statistics
+
+### AI Integration
+
+**Enhanced AI Mentor Memory:**
+- Daily summaries included in AI mentor context
+- Last 5 days shown for pattern recognition  
+- Productivity trends and recurring challenges visible
+- Gratitude themes tracked over time
+
+**AI Response Types:**
+1. **Task Support** - Encouraging responses to progress reports
+2. **Practical Help** - Actionable advice for stuck tasks
+3. **Gratitude Response** - Warm acknowledgment of self-appreciation
+4. **Daily Summary** - Comprehensive day analysis
+
+### Technical Implementation
+
+**Key Functions:**
+- `start_evening_session()` - Initializes session with active tasks
+- `process_evening_session()` - Handles all user messages during session
+- `handle_task_review()` - Manages individual task discussions
+- `generate_task_support()` - AI encouragement for progress
+- `generate_task_help()` - AI practical advice for obstacles
+- `generate_daily_summary()` - Creates long-term memory summary
+- `can_start_evening_session()` - Availability logic
+
+**Session States:**
+- `starting` - Initial setup
+- `task_review` - Going through tasks
+- `gratitude` - Gratitude question
+- `summary` - Generating final summary
+- `completed` - Session finished
+
+**Memory Management:**
+- Sessions stored temporarily during active session
+- Completed sessions converted to daily summaries
+- Long-term memory limited to 30 days
+- AI context includes recent productivity patterns
+
+### Usage Example
+
+```
+User: /вечерний
+
+Bot: 🌙 Вечерний AI-трекер
+
+Давайте подведем итоги дня! Я пройдусь по каждой из ваших 3 активных задач, поддержу вас и помогу, если нужно.
+
+📋 Задачи для обзора:
+1. 🔥 Подготовить презентацию
+2. 📋 Написать отчет  
+3. ⚡ Встреча с клиентом
+
+🎯 В конце поговорим о том, за что вы благодарны себе сегодня.
+
+[Начать вечерний трекер] [Не сейчас]
+
+User: [Начать вечерний трекер]
+
+Bot: 🤖 Вечерний AI-трекер (1/3)
+
+Расскажите, что удалось сделать сегодня по задаче:
+**Подготовить презентацию**
+
+Если ничего не делали - тоже не страшно, просто напишите 'ничего' или 'не делал'.
+
+User: Сделал структуру и первые 5 слайдов
+
+Bot: 🤖 Вечерний AI-трекер:
+
+Отличный прогресс! Структура - это основа всей презентации, а 5 слайдов уже конкретный результат. Вы двигаетесь в правильном направлении!
+
+[Session continues through all tasks, then gratitude, then final summary]
+```
+
+### Integration with Existing Features
+
+**AI Mentor Enhancement:**
+- Now has access to 30-day productivity history
+- Can reference past challenges and patterns
+- Provides more contextual advice based on trends
+- Remembers what help was provided before
+
+**Settings Integration:**
+- Evening tracker can be enabled/disabled in settings
+- Timezone settings affect daily date calculations  
+- Notification preferences include evening tracker timing
+
+**Task Management Integration:**
+- Only active tasks (pending/in-progress) are reviewed
+- Task priorities and statuses visible in session
+- Progress discussions can influence task management advice
 
 ## Phase 2 - Core Task Management Features ✅
 
@@ -286,6 +484,7 @@ tasks:
 - `/задачи`, `/tasks`, `задачи`, `tasks` - Show tasks menu
 - `/новая`, `/new`, `новая задача`, `создать задачу` - Create new task
 - `/меню`, `/menu`, `меню` - Show main menu
+- `/вечерний`, `/evening`, `вечерний трекер` - Start evening AI tracker session
 
 **Key Functions in tracker.py:**
 - `create_task()` - Creates new task
@@ -448,28 +647,35 @@ user_data:
 
 ### Feature Matrix
 
-| Feature | Phase 1 | Phase 2 | Phase 3 | Status |
-|---------|---------|---------|---------|---------|
-| User Onboarding | ✅ | - | - | Complete |
-| Anxiety Assessment | ✅ | - | - | Complete |
-| AI Mentor Chat | ✅ | ✅ | ✅ | Complete |
-| Task CRUD | - | ✅ | - | Complete |
-| Priority Management | - | ✅ | - | Complete |
-| Status Tracking | - | ✅ | - | Complete |
-| Interactive UI | ✅ | ✅ | ✅ | Complete |
-| Daily Digest | - | - | ✅ | Complete |
-| Deadline Alerts | - | - | ✅ | Complete |
-| Timezone Support | - | - | ✅ | Complete |
-| Settings Interface | - | - | ✅ | Complete |
+| Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Status |
+|---------|---------|---------|---------|---------|---------|
+| User Onboarding | ✅ | - | - | - | Complete |
+| Anxiety Assessment | ✅ | - | - | - | Complete |
+| AI Mentor Chat | ✅ | ✅ | ✅ | ✅ | Complete |
+| Task CRUD | - | ✅ | - | - | Complete |
+| Priority Management | - | ✅ | - | - | Complete |
+| Status Tracking | - | ✅ | - | - | Complete |
+| Interactive UI | ✅ | ✅ | ✅ | ✅ | Complete |
+| Daily Digest | - | - | ✅ | - | Complete |
+| Deadline Alerts | - | - | ✅ | - | Complete |
+| Timezone Support | - | - | ✅ | ✅ | Complete |
+| Settings Interface | - | - | ✅ | - | Complete |
+| Evening AI Tracker | - | - | - | ✅ | Complete |
+| Long-term Memory | - | - | - | ✅ | Complete |
+| Daily Summaries | - | - | - | ✅ | Complete |
+| Progress Support | - | - | - | ✅ | Complete |
+| Gratitude Practice | - | - | - | ✅ | Complete |
 
 ### Production Readiness
 
 **Completed Features:** 
-- ✅ Complete user workflow from onboarding to daily task management
-- ✅ Persistent data storage with YAML
+- ✅ Complete user workflow from onboarding to daily reflection
+- ✅ Persistent data storage with YAML (tasks, sessions, summaries)
 - ✅ Error handling and logging throughout
 - ✅ Timezone-aware operations  
 - ✅ Background notification system
+- ✅ Evening AI tracker with long-term memory
+- ✅ Daily summary generation and storage
 - ✅ Comprehensive testing suite
 - ✅ Graceful shutdown handling
 
@@ -478,7 +684,13 @@ The tracker is now a complete, production-ready stress management and productivi
 - Trust-building onboarding experience
 - Full task lifecycle management
 - Intelligent notification system
-- AI-powered mentoring capabilities
+- AI-powered mentoring with 30-day memory
+- Evening reflection and gratitude practice
+- Automated daily summaries and insights
 - Robust technical architecture
 
-**Usage:** `/mode` → "tracker" → Complete 3-phase experience
+**Usage:** `/mode` → "tracker" → Complete 4-phase experience
+- **Phase 1**: Welcome & Assessment
+- **Phase 2**: Task Management  
+- **Phase 3**: Notifications & Timezone
+- **Phase 4**: Evening AI Tracker & Long-term Memory

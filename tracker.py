@@ -7,7 +7,7 @@ from .logger import create_logger
 from .client import client
 from .constants import GPT4_MODEL
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytz
 
 logger = create_logger(__name__)
@@ -100,6 +100,138 @@ class TrackerUserData:
         self.current_view = "main"  # Текущий вид интерфейса (main, tasks, add_task, etc.)
         self.timezone = "UTC"  # Часовой пояс пользователя
         self.notification_time = "09:00"  # Время для ежедневных уведомлений
+        
+        # Вечерний трекер
+        self.evening_tracking_enabled = True  # Включен ли вечерний трекер
+        self.evening_tracking_time = "21:00"  # Время вечернего трекера
+        self.current_evening_session = None  # Текущая сессия вечернего трекера
+        self.daily_summaries = []  # Список дневных саммари для долгосрочной памяти
+
+# Классы для вечернего трекера
+class EveningSessionState:
+    """Состояния сессии вечернего трекера"""
+    STARTING = "starting"
+    TASK_REVIEW = "task_review"
+    GRATITUDE = "gratitude"
+    SUMMARY = "summary"
+    COMPLETED = "completed"
+
+class TaskReviewItem:
+    """Элемент обзора задачи в вечерней сессии"""
+    def __init__(self, task_id: str, task_title: str):
+        self.task_id = task_id
+        self.task_title = task_title
+        self.progress_description = ""  # Что было сделано
+        self.needs_help = False  # Нужна ли помощь
+        self.help_provided = ""  # Оказанная помощь
+        self.ai_support = ""  # Поддержка от AI
+        self.completed = False  # Завершен ли обзор этой задачи
+    
+    def to_dict(self) -> Dict:
+        return {
+            'task_id': self.task_id,
+            'task_title': self.task_title,
+            'progress_description': self.progress_description,
+            'needs_help': self.needs_help,
+            'help_provided': self.help_provided,
+            'ai_support': self.ai_support,
+            'completed': self.completed
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'TaskReviewItem':
+        item = cls(data['task_id'], data['task_title'])
+        item.progress_description = data.get('progress_description', '')
+        item.needs_help = data.get('needs_help', False) 
+        item.help_provided = data.get('help_provided', '')
+        item.ai_support = data.get('ai_support', '')
+        item.completed = data.get('completed', False)
+        return item
+
+class EveningTrackingSession:
+    """Сессия вечернего трекера"""
+    def __init__(self, user_id: int, date_str: str):
+        self.user_id = user_id
+        self.date = date_str  # YYYY-MM-DD формат
+        self.state = EveningSessionState.STARTING
+        self.started_at = int(time.time())
+        self.completed_at = None
+        self.task_reviews = []  # List[TaskReviewItem]
+        self.current_task_index = 0  # Индекс текущей обрабатываемой задачи
+        self.gratitude_answer = ""  # Ответ на вопрос благодарности
+        self.summary = ""  # Итоговое саммари дня
+        self.ai_conversation = []  # История разговора с AI в этой сессии
+    
+    def to_dict(self) -> Dict:
+        return {
+            'user_id': self.user_id,
+            'date': self.date,
+            'state': self.state,
+            'started_at': self.started_at,
+            'completed_at': self.completed_at,
+            'task_reviews': [review.to_dict() for review in self.task_reviews],
+            'current_task_index': self.current_task_index,
+            'gratitude_answer': self.gratitude_answer,
+            'summary': self.summary,
+            'ai_conversation': self.ai_conversation
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'EveningTrackingSession':
+        session = cls(data['user_id'], data['date'])
+        session.state = data.get('state', EveningSessionState.STARTING)
+        session.started_at = data.get('started_at', int(time.time()))
+        session.completed_at = data.get('completed_at')
+        session.task_reviews = [TaskReviewItem.from_dict(review) for review in data.get('task_reviews', [])]
+        session.current_task_index = data.get('current_task_index', 0)
+        session.gratitude_answer = data.get('gratitude_answer', '')
+        session.summary = data.get('summary', '')
+        session.ai_conversation = data.get('ai_conversation', [])
+        return session
+
+class DailySummary:
+    """Дневное саммари для долгосрочной памяти AI-ментора"""
+    def __init__(self, date_str: str, user_id: int):
+        self.date = date_str  # YYYY-MM-DD
+        self.user_id = user_id
+        self.created_at = int(time.time())
+        self.tasks_reviewed = 0  # Количество проверенных задач
+        self.tasks_with_progress = 0  # Задач с прогрессом
+        self.tasks_needing_help = 0  # Задач, требующих помощи
+        self.gratitude_theme = ""  # Тема благодарности
+        self.key_insights = []  # Ключевые инсайты дня
+        self.mood_indicators = []  # Индикаторы настроения
+        self.productivity_level = "medium"  # low, medium, high
+        self.summary_text = ""  # Текстовое саммари
+    
+    def to_dict(self) -> Dict:
+        return {
+            'date': self.date,
+            'user_id': self.user_id,
+            'created_at': self.created_at,
+            'tasks_reviewed': self.tasks_reviewed,
+            'tasks_with_progress': self.tasks_with_progress,
+            'tasks_needing_help': self.tasks_needing_help,
+            'gratitude_theme': self.gratitude_theme,
+            'key_insights': self.key_insights,
+            'mood_indicators': self.mood_indicators,
+            'productivity_level': self.productivity_level,
+            'summary_text': self.summary_text
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'DailySummary':
+        summary = cls(data['date'], data['user_id'])
+        summary.created_at = data.get('created_at', int(time.time()))
+        summary.tasks_reviewed = data.get('tasks_reviewed', 0)
+        summary.tasks_with_progress = data.get('tasks_with_progress', 0)
+        summary.tasks_needing_help = data.get('tasks_needing_help', 0)
+        summary.gratitude_theme = data.get('gratitude_theme', '')
+        summary.key_insights = data.get('key_insights', [])
+        summary.mood_indicators = data.get('mood_indicators', [])
+        summary.productivity_level = data.get('productivity_level', 'medium')
+        summary.summary_text = data.get('summary_text', '')
+        return summary
 
 def load_tracker_data() -> Dict:
     """Загружает данные трекера из YAML файла"""
@@ -145,6 +277,12 @@ def get_user_data(user_id: int) -> TrackerUserData:
         user_data.current_view = user_data_dict.get('current_view', 'main')
         user_data.timezone = user_data_dict.get('timezone', 'UTC')
         user_data.notification_time = user_data_dict.get('notification_time', '09:00')
+        
+        # Вечерний трекер
+        user_data.evening_tracking_enabled = user_data_dict.get('evening_tracking_enabled', True)
+        user_data.evening_tracking_time = user_data_dict.get('evening_tracking_time', '21:00')
+        user_data.current_evening_session = user_data_dict.get('current_evening_session')
+        user_data.daily_summaries = user_data_dict.get('daily_summaries', [])
     
     return user_data
 
@@ -165,7 +303,11 @@ def save_user_data(user_data: TrackerUserData):
         'tasks': [task.to_dict() for task in user_data.tasks],
         'current_view': user_data.current_view,
         'timezone': user_data.timezone,
-        'notification_time': user_data.notification_time
+        'notification_time': user_data.notification_time,
+        'evening_tracking_enabled': user_data.evening_tracking_enabled,
+        'evening_tracking_time': user_data.evening_tracking_time,
+        'current_evening_session': user_data.current_evening_session,
+        'daily_summaries': user_data.daily_summaries
     }
     save_tracker_data(all_data)
 
@@ -268,7 +410,7 @@ def create_ai_mentor_context(user_data: TrackerUserData) -> str:
     context_parts = []
     
     # Базовая информация
-    context_parts.append(f"Пользователь проходит настройку трекера задач.")
+    context_parts.append(f"Пользователь использует трекер задач.")
     
     # Уровень тревожности
     if user_data.anxiety_level:
@@ -286,6 +428,55 @@ def create_ai_mentor_context(user_data: TrackerUserData) -> str:
         if goal_descriptions:
             context_parts.append(f"Основные цели: {', '.join(goal_descriptions).lower()}.")
     
+    # Информация о задачах
+    if user_data.tasks:
+        # Статистика задач
+        pending_tasks = get_tasks_by_status(user_data, TaskStatus.PENDING)
+        in_progress_tasks = get_tasks_by_status(user_data, TaskStatus.IN_PROGRESS)
+        completed_tasks = get_tasks_by_status(user_data, TaskStatus.COMPLETED)
+        
+        context_parts.append(f"Всего задач: {len(user_data.tasks)} (ожидают: {len(pending_tasks)}, в работе: {len(in_progress_tasks)}, выполнены: {len(completed_tasks)}).")
+        
+        # Активные задачи (ожидающие и в работе)
+        active_tasks = pending_tasks + in_progress_tasks
+        if active_tasks:
+            context_parts.append("Текущие задачи:")
+            for task in active_tasks[:5]:  # Максимум 5 задач для экономии токенов
+                priority_desc = PRIORITY_DESCRIPTIONS.get(task.priority, "обычная")
+                status_desc = STATUS_DESCRIPTIONS.get(task.status, "неизвестно")
+                due_info = ""
+                if task.due_date:
+                    due_date_str = format_datetime_for_user(task.due_date, user_data)
+                    due_info = f", срок: {due_date_str}"
+                context_parts.append(f"- '{task.title}' ({priority_desc} приоритет, {status_desc}{due_info})")
+            
+            if len(active_tasks) > 5:
+                context_parts.append(f"... и еще {len(active_tasks) - 5} задач.")
+    else:
+        context_parts.append("У пользователя пока нет задач.")
+    
+    # Долгосрочная память - последние саммари дней
+    if user_data.daily_summaries:
+        context_parts.append("История последних дней:")
+        # Показываем последние 5 дней для контекста
+        recent_summaries = user_data.daily_summaries[-5:]
+        for summary_dict in recent_summaries:
+            if isinstance(summary_dict, dict):
+                date_str = summary_dict.get('date', 'неизвестная дата')
+                summary_text = summary_dict.get('summary_text', '')
+                productivity = summary_dict.get('productivity_level', 'medium')
+                productivity_desc = {"low": "низкая", "medium": "средняя", "high": "высокая"}.get(productivity, productivity)
+                
+                if summary_text:
+                    context_parts.append(f"- {date_str}: {summary_text[:100]}{'...' if len(summary_text) > 100 else ''} (продуктивность: {productivity_desc})")
+                else:
+                    tasks_reviewed = summary_dict.get('tasks_reviewed', 0)
+                    tasks_with_progress = summary_dict.get('tasks_with_progress', 0)
+                    context_parts.append(f"- {date_str}: обзор {tasks_reviewed} задач, прогресс по {tasks_with_progress} (продуктивность: {productivity_desc})")
+        
+        if len(user_data.daily_summaries) > 5:
+            context_parts.append(f"... и еще {len(user_data.daily_summaries) - 5} дней в памяти.")
+    
     return " ".join(context_parts)
 
 async def chat_with_ai_mentor(user_data: TrackerUserData, user_message: str) -> str:
@@ -294,11 +485,10 @@ async def chat_with_ai_mentor(user_data: TrackerUserData, user_message: str) -> 
         # Подготавливаем сообщения для API
         messages = [{"role": "system", "content": AI_MENTOR_SYSTEM_PROMPT}]
         
-        # Добавляем контекст о пользователе только при первом общении
-        if not user_data.ai_mentor_history:
-            context = create_ai_mentor_context(user_data)
-            if context:
-                messages.append({"role": "system", "content": f"Контекст о пользователе: {context}"})
+        # Добавляем актуальный контекст о пользователе при каждом запросе
+        context = create_ai_mentor_context(user_data)
+        if context:
+            messages.append({"role": "system", "content": f"Актуальная информация о пользователе: {context}"})
         
         # Добавляем историю разговоров
         messages.extend(user_data.ai_mentor_history)
@@ -814,6 +1004,14 @@ async def process_tracker_callback(callback_query: types.CallbackQuery):
         except Exception as e:
             logger.error(f"Error sending test digest: {e}")
             await callback_query.answer("❌ Ошибка отправки дайджеста")
+    
+    # === Обработка вечернего трекера ===
+    
+    elif data == "tracker_evening_tracker":
+        await show_evening_tracker_start(callback_query.message, user_data)
+    
+    elif data == "tracker_evening_start":
+        await start_evening_tracking_session(callback_query.message, user_data)
 
 async def show_priority_selection(message: types.Message, user_data: TrackerUserData, task_id: str):
     """Показывает меню выбора приоритета"""
@@ -995,6 +1193,12 @@ async def handle_main_tracker_functionality(message: types.Message, user_data: T
     """Обработка основного функционала трекера (после завершения приветственного модуля)"""
     user_message = message.text.strip()
     
+    # Проверяем, идет ли вечерняя сессия
+    if user_data.current_evening_session:
+        session_handled = await process_evening_session(message, user_data)
+        if session_handled:
+            return
+    
     # Обработка команд для управления задачами
     if user_message.lower().startswith(('/задачи', '/tasks', 'задачи', 'tasks')):
         await show_tasks_menu(message, user_data)
@@ -1004,6 +1208,9 @@ async def handle_main_tracker_functionality(message: types.Message, user_data: T
         return
     elif user_message.lower().startswith(('/меню', '/menu', 'меню')):
         await show_main_menu(message, user_data)
+        return
+    elif user_message.lower().startswith(('/вечерний', '/evening', 'вечерний трекер')):
+        await show_evening_tracker_start(message, user_data)
         return
     
     # Если пользователь в процессе создания задачи
@@ -1043,12 +1250,19 @@ async def show_main_menu(message: types.Message, user_data: TrackerUserData):
         f"Выберите действие:"
     )
     
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+    keyboard_rows = [
         [types.InlineKeyboardButton(text="📋 Мои задачи", callback_data="tracker_show_tasks")],
         [types.InlineKeyboardButton(text="➕ Новая задача", callback_data="tracker_new_task")],
-        [types.InlineKeyboardButton(text="🤖 AI-ментор", callback_data="tracker_ai_mentor_chat")],
-        [types.InlineKeyboardButton(text="⚙️ Настройки", callback_data="tracker_settings")]
-    ])
+        [types.InlineKeyboardButton(text="🤖 AI-ментор", callback_data="tracker_ai_mentor_chat")]
+    ]
+    
+    # Добавляем кнопку вечернего трекера, если он доступен
+    if can_start_evening_session(user_data):
+        keyboard_rows.append([types.InlineKeyboardButton(text="🌙 Вечерний трекер", callback_data="tracker_evening_tracker")])
+    
+    keyboard_rows.append([types.InlineKeyboardButton(text="⚙️ Настройки", callback_data="tracker_settings")])
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
     
     await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
 
@@ -1510,3 +1724,353 @@ async def show_step_6_completion(message: types.Message, user_data: TrackerUserD
 async def handle_completion(message: types.Message, user_data: TrackerUserData):
     """Шаг 6: Завершение приветственного модуля"""
     await show_step_6_completion(message, user_data)
+
+# === Функции вечернего трекера ===
+
+def get_today_date_str(user_data: TrackerUserData) -> str:
+    """Получает сегодняшнюю дату в часовом поясе пользователя"""
+    try:
+        user_tz = pytz.timezone(user_data.timezone)
+        today = datetime.now(user_tz).date()
+        return today.strftime('%Y-%m-%d')
+    except:
+        return datetime.now().date().strftime('%Y-%m-%d')
+
+def can_start_evening_session(user_data: TrackerUserData) -> bool:
+    """Проверяет, можно ли начать вечернюю сессию"""
+    if not user_data.evening_tracking_enabled:
+        return False
+    
+    # Проверяем, есть ли активные задачи
+    active_tasks = get_tasks_by_status(user_data, TaskStatus.PENDING) + get_tasks_by_status(user_data, TaskStatus.IN_PROGRESS)
+    if not active_tasks:
+        return False
+    
+    # Проверяем, не была ли уже проведена сессия сегодня
+    today = get_today_date_str(user_data)
+    for summary in user_data.daily_summaries:
+        if isinstance(summary, dict) and summary.get('date') == today:
+            return False
+        elif hasattr(summary, 'date') and summary.date == today:
+            return False
+    
+    return True
+
+def start_evening_session(user_data: TrackerUserData) -> EveningTrackingSession:
+    """Начинает новую вечернюю сессию"""
+    today = get_today_date_str(user_data)
+    session = EveningTrackingSession(user_data.user_id, today)
+    
+    # Добавляем активные задачи для обзора
+    active_tasks = get_tasks_by_status(user_data, TaskStatus.PENDING) + get_tasks_by_status(user_data, TaskStatus.IN_PROGRESS)
+    for task in active_tasks:
+        review_item = TaskReviewItem(task.id, task.title)
+        session.task_reviews.append(review_item)
+    
+    session.state = EveningSessionState.TASK_REVIEW
+    user_data.current_evening_session = session.to_dict()
+    save_user_data(user_data)
+    
+    logger.info(f"Started evening session for user {user_data.user_id} with {len(session.task_reviews)} tasks")
+    return session
+
+async def process_evening_session(message: types.Message, user_data: TrackerUserData):
+    """Обрабатывает сообщения в рамках вечерней сессии"""
+    if not user_data.current_evening_session:
+        return False
+    
+    session = EveningTrackingSession.from_dict(user_data.current_evening_session)
+    user_message = message.text
+    
+    if session.state == EveningSessionState.TASK_REVIEW:
+        await handle_task_review(message, user_data, session, user_message)
+    elif session.state == EveningSessionState.GRATITUDE:
+        await handle_gratitude_question(message, user_data, session, user_message)
+    elif session.state == EveningSessionState.SUMMARY:
+        await complete_evening_session(message, user_data, session)
+    
+    return True
+
+async def handle_task_review(message: types.Message, user_data: TrackerUserData, session: EveningTrackingSession, user_message: str):
+    """Обрабатывает обзор задач"""
+    current_task_review = session.task_reviews[session.current_task_index]
+    
+    if not current_task_review.progress_description:
+        # Спрашиваем про прогресс
+        current_task_review.progress_description = user_message
+        session.ai_conversation.append({"role": "user", "content": user_message})
+        
+        # Генерируем поддерживающий ответ от AI
+        support_response = await generate_task_support(user_data, current_task_review, user_message)
+        current_task_review.ai_support = support_response
+        session.ai_conversation.append({"role": "assistant", "content": support_response})
+        
+        # Определяем, нужна ли помощь
+        if "ничего" in user_message.lower() or "не делал" in user_message.lower() or "нет" in user_message.lower():
+            current_task_review.needs_help = True
+            await message.answer(f"🤖 **Вечерний AI-трекер:**\n\n{support_response}\n\nКак я могу помочь с этой задачей? Расскажите, что вас останавливает или с чем нужна поддержка.", parse_mode="Markdown")
+        else:
+            await message.answer(f"🤖 **Вечерний AI-трекер:**\n\n{support_response}", parse_mode="Markdown")
+            await move_to_next_task(message, user_data, session)
+    
+    elif current_task_review.needs_help and not current_task_review.help_provided:
+        # Обрабатываем запрос помощи
+        current_task_review.help_provided = user_message
+        session.ai_conversation.append({"role": "user", "content": user_message})
+        
+        help_response = await generate_task_help(user_data, current_task_review, user_message)
+        session.ai_conversation.append({"role": "assistant", "content": help_response})
+        
+        await message.answer(f"🤖 **Вечерний AI-трекер:**\n\n{help_response}", parse_mode="Markdown")
+        await move_to_next_task(message, user_data, session)
+    
+    # Сохраняем изменения
+    user_data.current_evening_session = session.to_dict()
+    save_user_data(user_data)
+
+async def move_to_next_task(message: types.Message, user_data: TrackerUserData, session: EveningTrackingSession):
+    """Переходит к следующей задаче или к вопросу благодарности"""
+    session.current_task_index += 1
+    
+    if session.current_task_index >= len(session.task_reviews):
+        # Все задачи обработаны, переходим к благодарности
+        session.state = EveningSessionState.GRATITUDE
+        await ask_gratitude_question(message, user_data, session)
+    else:
+        # Спрашиваем про следующую задачу
+        await ask_about_next_task(message, user_data, session)
+
+async def ask_about_next_task(message: types.Message, user_data: TrackerUserData, session: EveningTrackingSession):
+    """Спрашивает про следующую задачу"""
+    current_task_review = session.task_reviews[session.current_task_index]
+    task_num = session.current_task_index + 1
+    total_tasks = len(session.task_reviews)
+    
+    text = (f"🤖 **Вечерний AI-трекер** ({task_num}/{total_tasks})\n\n"
+            f"Расскажите, что удалось сделать сегодня по задаче:\n"
+            f"**{current_task_review.task_title}**\n\n"
+            f"Если ничего не делали - тоже не страшно, просто напишите 'ничего' или 'не делал'.")
+    
+    await message.answer(text, parse_mode="Markdown")
+
+async def ask_gratitude_question(message: types.Message, user_data: TrackerUserData, session: EveningTrackingSession):
+    """Задает вопрос благодарности"""
+    text = (f"🤖 **Вечерний AI-трекер**\n\n"
+            f"Последний вопрос на сегодня 😊\n\n"
+            f"**За что вы благодарны себе сегодня?**\n\n"
+            f"Это может быть что угодно - маленькое достижение, преодоление трудности, забота о себе, или даже просто то, что вы дошли до конца дня.")
+    
+    await message.answer(text, parse_mode="Markdown")
+
+async def handle_gratitude_question(message: types.Message, user_data: TrackerUserData, session: EveningTrackingSession, user_message: str):
+    """Обрабатывает ответ на вопрос благодарности"""
+    session.gratitude_answer = user_message
+    session.ai_conversation.append({"role": "user", "content": user_message})
+    
+    # Генерируем благодарный ответ
+    gratitude_response = await generate_gratitude_response(user_data, user_message)
+    session.ai_conversation.append({"role": "assistant", "content": gratitude_response})
+    
+    await message.answer(f"🤖 **Вечерний AI-трекер:**\n\n{gratitude_response}", parse_mode="Markdown")
+    
+    # Переходим к генерации саммари
+    session.state = EveningSessionState.SUMMARY
+    await complete_evening_session(message, user_data, session)
+
+async def complete_evening_session(message: types.Message, user_data: TrackerUserData, session: EveningTrackingSession):
+    """Завершает вечернюю сессию и создает саммари"""
+    # Генерируем саммари дня
+    daily_summary = await generate_daily_summary(user_data, session)
+    
+    # Сохраняем саммари в долгосрочную память
+    user_data.daily_summaries.append(daily_summary.to_dict())
+    
+    # Ограничиваем количество саммари (храним последние 30 дней)
+    if len(user_data.daily_summaries) > 30:
+        user_data.daily_summaries = user_data.daily_summaries[-30:]
+    
+    # Завершаем сессию
+    session.completed_at = int(time.time())
+    session.state = EveningSessionState.COMPLETED
+    session.summary = daily_summary.summary_text
+    
+    # Очищаем текущую сессию
+    user_data.current_evening_session = None
+    save_user_data(user_data)
+    
+    # Отправляем итоговое саммари
+    text = (f"🌙 **Итоги дня {daily_summary.date}**\n\n"
+            f"{daily_summary.summary_text}\n\n"
+            f"📊 **Статистика:**\n"
+            f"• Задач рассмотрено: {daily_summary.tasks_reviewed}\n"
+            f"• С прогрессом: {daily_summary.tasks_with_progress}\n"
+            f"• Требовали помощи: {daily_summary.tasks_needing_help}\n\n"
+            f"💫 Спокойной ночи! Завтра будет новый день для достижений.")
+    
+    await message.answer(text, parse_mode="Markdown")
+    logger.info(f"Completed evening session for user {user_data.user_id}")
+
+# === Функции генерации AI-ответов для вечернего трекера ===
+
+async def generate_task_support(user_data: TrackerUserData, task_review: TaskReviewItem, user_message: str) -> str:
+    """Генерирует поддерживающий ответ AI по задаче"""
+    try:
+        system_prompt = """Ты - поддерживающий AI-ментор в вечернем трекере задач. 
+Твоя роль - дать короткую (1-2 предложения) эмоциональную поддержку пользователю по его прогрессу с задачей.
+
+Если пользователь поделился прогрессом - поддержи и похвали.
+Если пользователь ничего не делал - поддержи без осуждения, скажи что это нормально.
+
+Будь теплым, понимающим и мотивирующим. Пиши от первого лица."""
+        
+        context = f"Задача: '{task_review.task_title}'\nОтвет пользователя: '{user_message}'"
+        
+        response = await client.chat.completions.create(
+            model=GPT4_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": context}
+            ],
+            max_tokens=150,
+            temperature=0.8
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"Error generating task support: {e}")
+        if "ничего" in user_message.lower() or "не делал" in user_message.lower():
+            return "Все в порядке! Бывают дни, когда сложно браться за задачи. Главное - не судить себя строго."
+        else:
+            return "Отлично! Любой прогресс важен, даже если кажется небольшим."
+
+async def generate_task_help(user_data: TrackerUserData, task_review: TaskReviewItem, help_request: str) -> str:
+    """Генерирует помощь по задаче"""
+    try:
+        system_prompt = """Ты - помощник-ментор по продуктивности. 
+Пользователь просит помощи с задачей. Дай практичный совет (2-3 предложения) как решить проблему или преодолеть препятствие.
+
+Фокусируйся на конкретных действиях, разбиении на части, устранении блокеров.
+Будь поддерживающим и практичным."""
+        
+        context = f"Задача: '{task_review.task_title}'\nПроблема: '{help_request}'"
+        
+        response = await client.chat.completions.create(
+            model=GPT4_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": context}
+            ],
+            max_tokens=200,
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"Error generating task help: {e}")
+        return "Попробуйте разбить задачу на более мелкие шаги. Часто большие задачи кажутся сложными именно из-за своего размера."
+
+async def generate_gratitude_response(user_data: TrackerUserData, gratitude_message: str) -> str:
+    """Генерирует ответ на благодарность"""
+    try:
+        system_prompt = """Ты - поддерживающий AI-ментор. 
+Пользователь поделился тем, за что благодарен себе сегодня. 
+Дай теплый, вдохновляющий ответ (1-2 предложения), который подчеркивает важность самопризнания."""
+        
+        response = await client.chat.completions.create(
+            model=GPT4_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Я благодарен себе за: {gratitude_message}"}
+            ],
+            max_tokens=100,
+            temperature=0.8
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"Error generating gratitude response: {e}")
+        return "Прекрасно, что вы цените свои достижения! Признание собственных успехов - важная часть здорового отношения к себе."
+
+async def generate_daily_summary(user_data: TrackerUserData, session: EveningTrackingSession) -> DailySummary:
+    """Генерирует саммари дня для долгосрочной памяти"""
+    summary = DailySummary(session.date, user_data.user_id)
+    
+    # Подсчитываем статистику
+    summary.tasks_reviewed = len(session.task_reviews)
+    summary.tasks_with_progress = sum(1 for review in session.task_reviews 
+                                    if review.progress_description and "ничего" not in review.progress_description.lower())
+    summary.tasks_needing_help = sum(1 for review in session.task_reviews if review.needs_help)
+    
+    # Определяем уровень продуктивности
+    if summary.tasks_with_progress == 0:
+        summary.productivity_level = "low"
+    elif summary.tasks_with_progress >= summary.tasks_reviewed * 0.7:
+        summary.productivity_level = "high"
+    else:
+        summary.productivity_level = "medium"
+    
+    # Извлекаем тему благодарности
+    summary.gratitude_theme = session.gratitude_answer[:100] if session.gratitude_answer else ""
+    
+    try:
+        # Генерируем краткое саммари через AI
+        conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in session.ai_conversation[-10:]])
+        
+        system_prompt = """Создай краткое саммари дня (2-3 предложения) на основе вечерней сессии трекера.
+Включи: общий прогресс, настроение, ключевые инсайты.
+Пиши тепло и поддерживающе."""
+        
+        response = await client.chat.completions.create(
+            model=GPT4_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Диалог сессии:\n{conversation_text}\n\nБлагодарность: {session.gratitude_answer}"}
+            ],
+            max_tokens=200,
+            temperature=0.7
+        )
+        
+        summary.summary_text = response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"Error generating daily summary: {e}")
+        summary.summary_text = f"День завершен с прогрессом по {summary.tasks_with_progress} из {summary.tasks_reviewed} задач. {session.gratitude_answer[:50]}..."
+    
+    return summary
+
+# === Команды и UI для вечернего трекера ===
+
+async def show_evening_tracker_start(message: types.Message, user_data: TrackerUserData):
+    """Показывает начало вечернего трекера"""
+    if not can_start_evening_session(user_data):
+        text = "🌙 **Вечерний трекер недоступен**\n\nВозможные причины:\n• Трекер отключен в настройках\n• Нет активных задач\n• Сессия уже проведена сегодня"
+        await message.answer(text, parse_mode="Markdown")
+        return
+    
+    active_tasks = get_tasks_by_status(user_data, TaskStatus.PENDING) + get_tasks_by_status(user_data, TaskStatus.IN_PROGRESS)
+    
+    text = (f"🌙 **Вечерний AI-трекер**\n\n"
+            f"Давайте подведем итоги дня! Я пройдусь по каждой из ваших {len(active_tasks)} активных задач, "
+            f"поддержу вас и помогу, если нужно.\n\n"
+            f"📋 **Задачи для обзора:**\n")
+    
+    for i, task in enumerate(active_tasks, 1):
+        priority_emoji = "🔥" if task.priority == TaskPriority.HIGH else "⚡" if task.priority == TaskPriority.URGENT else "📋"
+        text += f"{i}. {priority_emoji} {task.title}\n"
+    
+    text += f"\n🎯 В конце поговорим о том, за что вы благодарны себе сегодня.\n\nГотовы начать?"
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="🌙 Начать вечерний трекер", callback_data="tracker_evening_start")],
+        [types.InlineKeyboardButton(text="❌ Не сейчас", callback_data="tracker_main_menu")]
+    ])
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+
+async def start_evening_tracking_session(message: types.Message, user_data: TrackerUserData):
+    """Запускает вечернюю сессию трекинга"""
+    session = start_evening_session(user_data)
+    await ask_about_next_task(message, user_data, session)
