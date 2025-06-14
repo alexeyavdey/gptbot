@@ -51,6 +51,10 @@ class BaseAgent:
     """Базовый класс для всех AI-агентов"""
     
     def __init__(self, api_key: str, model: str = "gpt-4"):
+        # Устанавливаем переменную окружения для LangChain
+        import os
+        os.environ['OPENAI_API_KEY'] = api_key
+        
         self.llm = ChatOpenAI(
             api_key=api_key,
             model=model,
@@ -271,11 +275,21 @@ class TaskManagementAgent(BaseAgent):
         except Exception as e:
             return json.dumps({"success": False, "error": str(e)})
     
-    def _get_analytics(self, params: str) -> str:
+    def _get_analytics(self, params) -> str:
         """Получение аналитики"""
         try:
-            data = json.loads(params)
-            user_id = data['user_id']
+            # Обрабатываем разные форматы входных данных
+            if isinstance(params, str):
+                try:
+                    data = json.loads(params)
+                    user_id = data['user_id']
+                except:
+                    # Если это просто строка с числом
+                    user_id = int(params)
+            elif isinstance(params, int):
+                user_id = params
+            else:
+                raise ValueError(f"Unexpected params type: {type(params)}")
             
             self.db.ensure_user_exists(user_id)
             analytics = self.db.get_task_analytics(user_id)
