@@ -167,6 +167,23 @@ class TaskManagementAgent(BaseAgent):
         Всегда отвечай на русском языке, будь дружелюбным и конструктивным.
         """
     
+    def _validate_user_id(self, user_id_raw) -> tuple[int, str]:
+        """Валидация и конвертация user_id в integer
+        
+        Returns:
+            tuple: (user_id: int, error_message: str)
+            Если ошибка, user_id будет None, error_message содержит описание
+        """
+        if isinstance(user_id_raw, str):
+            if user_id_raw.isdigit():
+                return int(user_id_raw), ""
+            else:
+                return None, f"❌ Ошибка: Неверный формат user_id '{user_id_raw}'. Ожидается числовой ID."
+        elif isinstance(user_id_raw, int):
+            return user_id_raw, ""
+        else:
+            return None, f"❌ Ошибка: Неверный тип user_id {type(user_id_raw)}. Ожидается integer."
+    
     def _create_tools(self) -> List[Tool]:
         """Создание инструментов для работы с задачами"""
         return [
@@ -255,7 +272,13 @@ class TaskManagementAgent(BaseAgent):
         """Создание новой задачи"""
         try:
             data = json.loads(params)
-            user_id = data['user_id']
+            user_id_raw = data['user_id']
+            
+            # Валидация и конвертация user_id в integer
+            user_id, error = self._validate_user_id(user_id_raw)
+            if error:
+                return error
+            
             title = data['title']
             description = data.get('description', '')
             priority = data.get('priority', 'medium')
@@ -273,7 +296,13 @@ class TaskManagementAgent(BaseAgent):
         """Получение списка задач"""
         try:
             data = json.loads(params)
-            user_id = data['user_id']
+            user_id_raw = data['user_id']
+            
+            # Валидация и конвертация user_id в integer
+            user_id, error = self._validate_user_id(user_id_raw)
+            if error:
+                return error
+            
             status = data.get('status')
             
             self.db.ensure_user_exists(user_id)
@@ -304,7 +333,13 @@ class TaskManagementAgent(BaseAgent):
         """Обновление задачи"""
         try:
             data = json.loads(params)
-            user_id = data['user_id']
+            user_id_raw = data['user_id']
+            
+            # Валидация и конвертация user_id в integer
+            user_id, error = self._validate_user_id(user_id_raw)
+            if error:
+                return json.dumps({"success": False, "error": error})
+            
             task_id = data['task_id']
             field = data['field']
             value = data['value']
@@ -327,7 +362,12 @@ class TaskManagementAgent(BaseAgent):
         """Интерактивное удаление задачи с подтверждением"""
         try:
             data = json.loads(params)
-            user_id = data['user_id']
+            user_id_raw = data['user_id']
+            
+            # Валидация и конвертация user_id в integer
+            user_id, error = self._validate_user_id(user_id_raw)
+            if error:
+                return error
             
             # Если передан task_id, это прямое удаление (для подтверждения)
             if 'task_id' in data:
@@ -535,7 +575,7 @@ class TaskManagementAgent(BaseAgent):
         try:
             # Создаем промпт с правильными переменными для агента
             prompt = ChatPromptTemplate.from_messages([
-                ("system", self.system_prompt),
+                ("system", self.system_prompt + f"\n\nТекущий пользователь ID: {user_id}. Используй этот ID во всех вызовах инструментов."),
                 ("placeholder", "{agent_scratchpad}"),
                 ("human", "{input}")
             ])
@@ -558,14 +598,21 @@ class TaskManagementAgent(BaseAgent):
             if isinstance(params, str):
                 try:
                     data = json.loads(params)
-                    user_id = data['user_id']
+                    user_id_raw = data['user_id']
+                    # Валидация и конвертация user_id в integer
+                    user_id, error = self._validate_user_id(user_id_raw)
+                    if error:
+                        return error
                 except:
                     # Если это просто строка с числом
-                    user_id = int(params)
+                    if params.isdigit():
+                        user_id = int(params)
+                    else:
+                        return f"❌ Ошибка: Неверный формат параметра '{params}'. Ожидается числовой ID."
             elif isinstance(params, int):
                 user_id = params
             else:
-                raise ValueError(f"Unexpected params type: {type(params)}")
+                return f"❌ Ошибка: Неверный тип параметра {type(params)}. Ожидается integer или JSON строка."
             
             self.db.ensure_user_exists(user_id)
             analytics = self.db.get_task_analytics(user_id)
@@ -595,7 +642,13 @@ class TaskManagementAgent(BaseAgent):
         """Фильтрация задач"""
         try:
             data = json.loads(params)
-            user_id = data['user_id']
+            user_id_raw = data['user_id']
+            
+            # Валидация и конвертация user_id в integer
+            user_id, error = self._validate_user_id(user_id_raw)
+            if error:
+                return json.dumps({"success": False, "error": error})
+            
             priority = data.get('priority')
             status = data.get('status')
             
