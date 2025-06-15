@@ -880,6 +880,8 @@ class TaskSelectorAgent(BaseAgent):
         3. Если несколько задач подходят - предложи уточнение
         4. Всегда требуй подтверждение для удаления
         5. Учитывай морфологию русского языка
+        6. ВАЖНО: Если пользователь говорит "да", "подтверждаю", "согласен" - это подтверждение действия
+        7. При подтверждении попытайся найти задачу из недавнего контекста разговора
 
         ПРИМЕРЫ:
         Пользователь: "удали задачу про стратегию"
@@ -1222,9 +1224,24 @@ class OrchestratorAgent(BaseAgent):
                 task_id = self._extract_task_id_from_message(message)
                 if task_id:
                     # Прямое удаление с подтверждением
-                    return await self.task_agent.process_message(user_id, message, {"task_id": task_id})
+                    response = await self.task_agent.process_message(user_id, message, {"task_id": task_id})
+                    return {
+                        "agent": "TASK_MANAGEMENT",
+                        "confidence": 1.0,
+                        "reasoning": "Подтверждение удаления задачи",
+                        "response": response
+                    }
                 else:
-                    return "❌ Не удалось найти ID задачи для подтверждения удаления. Попробуйте еще раз."
+                    # Попробуем найти задачу через LLM анализ
+                    logger.info("Подтверждение без task_id, пытаемся найти задачу через LLM")
+                    context = {"conversation_history": []}  # TODO: получать реальную историю
+                    response = await self.task_agent.process_message(user_id, message, context)
+                    return {
+                        "agent": "TASK_MANAGEMENT", 
+                        "confidence": 0.7,
+                        "reasoning": "Подтверждение удаления через LLM анализ",
+                        "response": response
+                    }
             
             # Получаем состояние пользователя для контекста
             if not user_state:
@@ -1277,7 +1294,9 @@ class OrchestratorAgent(BaseAgent):
                 return result.get('response', 'Ошибка в приветственном модуле')
                 
             elif agent_name == "TASK_MANAGEMENT":
-                return await self.task_agent.process_task_request(user_id, message)
+                # Передаем историю разговора для контекста
+                context = {"conversation_history": []}  # TODO: получать реальную историю
+                return await self.task_agent.process_message(user_id, message, context)
                 
             elif agent_name == "NOTIFICATIONS":
                 return await self.notification_agent.process_notification_request(user_id, message)
