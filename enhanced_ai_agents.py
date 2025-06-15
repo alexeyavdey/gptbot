@@ -914,11 +914,14 @@ class TaskSelectorAgent(BaseAgent):
                     for msg in conversation_history[-5:]  # Последние 5 сообщений
                 ])
 
+            # Экранируем JSON чтобы избежать конфликта с переменными LangChain
+            tasks_json = json.dumps(tasks_info, ensure_ascii=False, indent=2).replace('{', '{{').replace('}', '}}')
+            
             analysis_prompt = f"""
             СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: {user_message}
 
             СПИСОК ЗАДАЧ:
-            {json.dumps(tasks_info, ensure_ascii=False, indent=2)}
+            {tasks_json}
 
             КОНТЕКСТ РАЗГОВОРА:
             {context_info}
@@ -1210,6 +1213,15 @@ class OrchestratorAgent(BaseAgent):
         3. NOTIFICATIONS - настройка уведомлений и часовых поясов
         4. EVENING_TRACKER - вечерние сессии рефлексии и обзора дня
         5. AI_MENTOR - общение с AI-ментором, советы по продуктивности
+
+        ВАЖНЫЕ ПРАВИЛА РОУТИНГА:
+        - "создать/добавить/сделать задачу" → TASK_MANAGEMENT
+        - "показать/список/какие задачи" → TASK_MANAGEMENT
+        - "удалить/изменить задачу" → TASK_MANAGEMENT
+        - "сколько задач/статистика" → TASK_MANAGEMENT
+        - "как справиться/советы/помощь" → AI_MENTOR
+        - "уведомления/настройки" → NOTIFICATIONS
+        - "вечерний трекер" → EVENING_TRACKER
 
         Анализируй намерение пользователя и выбери ОДИН агент.
         Верни JSON с полями: {{"agent": "название_агента", "confidence": 0.95, "reasoning": "обоснование"}}
